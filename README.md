@@ -25,6 +25,17 @@ npm test
 npm run build
 ```
 
+## GitHub Pages deployment
+
+The project-site URL is `https://jb07-198.github.io/Kineo-/`. The GitHub Actions
+deployment workflow builds the app with that project path and publishes the generated
+`dist/` directory. In the repository, open **Settings → Pages → Build and deployment
+→ Source** and select **GitHub Actions** (do not publish the repository root as a
+branch). Push to `main` or run **Deploy GitHub Pages** manually from the Actions tab.
+
+Local development continues to use the root path; the `/Kineo-/` base is selected
+automatically inside GitHub Actions.
+
 ## Editor
 
 - Add rigid bodies from **+ Solide**; the ground is fixed and protected from deletion.

@@ -17,6 +17,10 @@
 | `npm run build` | PASS | TypeScript project build and Vite production bundle completed (29 modules transformed). |
 | `git diff --check` | PASS | No whitespace errors. |
 
+For the Pages fix, the GitHub Actions build is additionally verified with
+`GITHUB_ACTIONS=true npm run build`; the emitted HTML points to
+`/Kineo-/assets/...` and `/Kineo-/favicon.svg` rather than the unprefixed site root.
+
 Coverage includes validation of the original JSON v3.0 example, lossless conversion
 and serialization/reopening including unfamiliar nested properties, valid store import,
 missing/invalid references, numeric limits, joint-library completion, body/joint
