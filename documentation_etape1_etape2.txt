@@ -1,0 +1,359 @@
+================================================================================
+                    CINEMALAB - SPECIFICATIONS DU PROJET
+================================================================================
+
+--------------------------------------------------------------------------------
+ETAPE 1 : ANALYSE DES BESOINS ET PLANIFICATION (VERSION FINALE)
+--------------------------------------------------------------------------------
+
+1. Vision et Objectif du Projet
+-------------------------------
+* Nom du projet : CinémaLab
+* Problème résolu : La création et la simulation de schémas cinématiques normés
+  (2D/3D) sont complexes avec des outils CAO lourds ou des logiciels de dessin 
+  non spécialisés.
+* Solution : Une plateforme web/desktop tout-en-un, intuitive et intelligente 
+  permettant d'éditer, de vérifier la conformité des liaisons normées et 
+  d'animer le mouvement en temps réel.
+
+2. Spécifications Fonctionnelles (MVP)
+--------------------------------------
+* Édition 2D/3D :
+  - Bibliothèque de liaisons normées (ISO 3952-1 / AFNOR).
+  - Attribution automatique de couleurs par classes d'équivalence.
+  - Basculement synchronisé entre vue 2D, vue 3D et graphe des liaisons.
+* Ergonomie & Intelligence :
+  - Aimantage dynamique (snap) sur ancrages.
+  - Détection automatique des surcontraintes et incohérences.
+* Simulation :
+  - Animation interactive des degrés de liberté (DOF).
+  - Contrôle du DOF moteur et de la vitesse de rotation.
+  - Génération automatique du graphe des liaisons.
+* Exportation :
+  - Export vectoriel/image (SVG, PNG) pour cours et rapports.
+
+3. Choix Techniques & Infrastructure (0 €)
+------------------------------------------
+* Hébergement gratuit via GitHub Pages.
+* Déploiement initial en application Web Front-End (100% exécuté dans le navigateur).
+* Évolution future vers une version Desktop (.exe, .dmg) via Electron ou Tauri 
+  sans réécriture du code cœur.
+
+
+--------------------------------------------------------------------------------
+ETAPE 2 : CONCEPTION ET ARCHITECTURE - DESIGN (VERSION FINALE)
+--------------------------------------------------------------------------------
+
+1. Spécification du Modèle de Données (JSON v3.0)
+--------------------------------------------------
+
+{
+  "meta": {
+    "schemaVersion": "3.0",
+    "appVersion": "0.1.0",
+    "title": "Système Bielle-Manivelle-Piston Complexe",
+    "author": "Équipe Conception",
+    "lengthUnit": "mm",
+    "angleUnit": "deg"
+  },
+  "jointDefinitions": {
+    "PIVOT": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 1,
+      "dofTemplate": [
+        {
+          "type": "rotation",
+          "defaultAxisLocal": { "x": 0, "y": 0, "z": 1 },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    },
+    "GLISSIERE": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 1,
+      "dofTemplate": [
+        {
+          "type": "translation",
+          "defaultAxisLocal": { "x": 1, "y": 0, "z": 0 },
+          "defaultMin": -100,
+          "defaultMax": 100,
+          "unit": "mm"
+        }
+      ]
+    },
+    "PIVOT_GLISSANT": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 2,
+      "dofTemplate": [
+        {
+          "type": "translation",
+          "defaultAxisLocal": { "x": 1, "y": 0, "z": 0 },
+          "defaultMin": -100,
+          "defaultMax": 100,
+          "unit": "mm"
+        },
+        {
+          "type": "rotation",
+          "defaultAxisLocal": { "x": 1, "y": 0, "z": 0 },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    },
+    "ROTULE": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 3,
+      "dofTemplate": [
+        {
+          "type": "rotation",
+          "defaultAxisLocal": { "x": 1, "y": 0, "z": 0 },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        },
+        {
+          "type": "rotation",
+          "defaultAxisLocal": { "x": 0, "y": 1, "z": 0 },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        },
+        {
+          "type": "rotation",
+          "defaultAxisLocal": { "x": 0, "y": 0, "z": 1 },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    }
+  },
+  "classesEquivalence": [
+    {
+      "id": "eq_0",
+      "name": "Bâti / Socle",
+      "color": "#000000",
+      "isFixed": true,
+      "parentId": null
+    },
+    {
+      "id": "eq_1",
+      "name": "Manivelle",
+      "color": "#E63946",
+      "isFixed": false,
+      "parentId": null
+    },
+    {
+      "id": "eq_2",
+      "name": "Bielle",
+      "color": "#2A9D8F",
+      "isFixed": false,
+      "parentId": null
+    },
+    {
+      "id": "eq_3",
+      "name": "Piston",
+      "color": "#457B9D",
+      "isFixed": false,
+      "parentId": null
+    }
+  ],
+  "liaisons": [
+    {
+      "id": "link_1",
+      "name": "Pivot Bâti - Manivelle",
+      "type": "PIVOT",
+      "classA": "eq_0",
+      "classB": "eq_1",
+      "position": { "x": 0, "y": 0, "z": 0 },
+      "orientation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+      "anchors": {
+        "_comment": "CONVENTION : Ancrages exprimés en repère local de leur classe.",
+        "onClassA": { "x": 0, "y": 0, "z": 0 },
+        "onClassB": { "x": 0, "y": 0, "z": 0 }
+      },
+      "dof": [
+        {
+          "id": "dof_rot_manivelle",
+          "type": "rotation",
+          "axisLocal": { "x": 0, "y": 0, "z": 1 },
+          "min": -180,
+          "max": 180,
+          "value": 45,
+          "unit": "deg"
+        }
+      ]
+    },
+    {
+      "id": "link_2",
+      "name": "Pivot Manivelle - Bielle",
+      "type": "PIVOT",
+      "classA": "eq_1",
+      "classB": "eq_2",
+      "position": { "x": 100, "y": 0, "z": 0 },
+      "orientation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+      "anchors": {
+        "onClassA": { "x": 100, "y": 0, "z": 0 },
+        "onClassB": { "x": 0, "y": 0, "z": 0 }
+      },
+      "dof": [
+        {
+          "id": "dof_rot_bielle",
+          "type": "rotation",
+          "axisLocal": { "x": 0, "y": 0, "z": 1 },
+          "min": -180,
+          "max": 180,
+          "value": -15.2,
+          "unit": "deg"
+        }
+      ]
+    },
+    {
+      "id": "link_3",
+      "name": "Pivot-Glissant Bielle - Piston",
+      "type": "PIVOT_GLISSANT",
+      "classA": "eq_2",
+      "classB": "eq_3",
+      "position": { "x": 250, "y": 0, "z": 0 },
+      "orientation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+      "anchors": {
+        "onClassA": { "x": 180, "y": 0, "z": 0 },
+        "onClassB": { "x": 0, "y": 0, "z": 0 }
+      },
+      "dof": [
+        {
+          "id": "dof_trans_piston_axe",
+          "type": "translation",
+          "axisLocal": { "x": 1, "y": 0, "z": 0 },
+          "min": -20,
+          "max": 20,
+          "value": 0,
+          "unit": "mm"
+        },
+        {
+          "id": "dof_rot_piston_axe",
+          "type": "rotation",
+          "axisLocal": { "x": 1, "y": 0, "z": 0 },
+          "min": -180,
+          "max": 180,
+          "value": 0,
+          "unit": "deg"
+        }
+      ]
+    },
+    {
+      "id": "link_4",
+      "name": "Glissière Piston - Bâti",
+      "type": "GLISSIERE",
+      "classA": "eq_3",
+      "classB": "eq_0",
+      "position": { "x": 250, "y": 0, "z": 0 },
+      "orientation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+      "anchors": {
+        "onClassA": { "x": 0, "y": 0, "z": 0 },
+        "onClassB": { "x": 250, "y": 0, "z": 0 }
+      },
+      "dof": [
+        {
+          "id": "dof_trans_piston_bati",
+          "type": "translation",
+          "axisLocal": { "x": 1, "y": 0, "z": 0 },
+          "min": 50,
+          "max": 250,
+          "value": 180.5,
+          "unit": "mm"
+        }
+      ]
+    }
+  ],
+  "kinematics": {
+    "solverType": "IK_CONSTRAINTS",
+    "closedLoopMode": true,
+    "drivenDofs": [
+      {
+        "dofId": "dof_rot_manivelle",
+        "controlType": "SPEED",
+        "targetValue": 60,
+        "unit": "deg/s"
+      }
+    ]
+  },
+  "geometry": {
+    "entities": [
+      {
+        "id": "ent_manivelle",
+        "kind": "segment",
+        "classId": "eq_1",
+        "localPoints": [
+          { "x": 0, "y": 0, "z": 0 },
+          { "x": 100, "y": 0, "z": 0 }
+        ],
+        "style": { "stroke": "solid", "width": 2.0, "color": "#E63946" },
+        "view": "both"
+      },
+      {
+        "id": "ent_bielle",
+        "kind": "segment",
+        "classId": "eq_2",
+        "localPoints": [
+          { "x": 0, "y": 0, "z": 0 },
+          { "x": 180, "y": 0, "z": 0 }
+        ],
+        "style": { "stroke": "solid", "width": 2.0, "color": "#2A9D8F" },
+        "view": "both"
+      },
+      {
+        "id": "ent_piston",
+        "kind": "rectangle",
+        "classId": "eq_3",
+        "localPoints": [
+          { "x": -20, "y": -15, "z": 0 },
+          { "x": 20, "y": 15, "z": 0 }
+        ],
+        "style": { "stroke": "solid", "width": 1.5, "color": "#457B9D" },
+        "view": "both"
+      }
+    ]
+  }
+}
+
+2. Maquette de l'Interface Utilisateur (UI v2.0)
+-------------------------------------------------
+
++-------------------------------------------------------------------------------------------------------------------------+
+| CinémaLab  |  [☰ Fichier ▾]  [↶] [↷]  |  📄 Système Bielle-Manivelle-Piston ✎  |  [ ✏ Édition ] [ ▶ Simulation ]  |  [Exporter ▾]  [?] |
++-------------------------------------------------------------------------------------------------------------------------+
+| BARRE D'OUTILS CANVAS : [↖ Sélect] [↔ Déplacer] [⟳ Pivoter] | [⊞ Grille] [🧲 Snap] | [ Vue 2D ] [ Vue 3D ] [ Graphe ] | [Fit] |
++-----------------------+-----------------------------------------------------------------+-------------------------------+
+| BIBLIOTHÈQUE          | SCÈNE PRINCIPALE (Canvas 2D / 3D / Graphe)                       | PANNEAU DE PROPRIÉTÉS         |
+|                       |                                                                 | (Contextuel)                  |
+| 🔍 Rechercher...      |                                                                 |                               |
+|                       |                                                                 | ── LIAISON SÉLECTIONNÉE ───── |
+| LIAISONS (8)          |                                                                 | Nom : Link_3 (Pivot-Glissant) |
+| ┌────┐ ┌────┐ ┌────┐  |                                                                 | Class A : eq_2 (Bielle)       |
+| │ ⚬  │ │ ⇄  │ │ ⚬⇄ │  |                                                                 | Class B : eq_3 (Piston)       |
+| │Piv.│ │Gli.│ │P.G.│  |                                                                 |                               |
+| └────┘ └────┘ └────┘  |                                                                 | Ancrages (Repères locaux) :   |
+| ┌────┐ ┌────┐ ┌────┐  |                   ( Zone de dessin Canvas 2D /                 |  onClassA : [180, 0, 0] mm    |
+| │  ◎ │ │ ▭  │ │ 🔗 │  |                     Rendu Three.js 3D )                         |  onClassB : [0, 0, 0] mm      |
+| │Rot.│ │App.│ │Enc.│  |                                                                 |                               |
+| └────┘ └────┘ └────┘  |                                                                 | Degrés de liberté (2) :       |
+|                       |                                                                 | ┌───────────────────────────┐ |
+| PIÈCES / BÂTI         |                                                                 | │ 1. Translation X          │ |
+| ┌────┐ ┌────┐         |                                                                 | │    Axe : [1, 0, 0]        │ |
+| │▨▨▨│ │ ⚙  │         |                                                                 | │    Bornes : [-20, 20] mm  │ |
+| │Bâti│ │Pièce│        |                                                                 | │  🔓 Value : [ 0 ] mm      │ |
+| └────┘ └────┘         |                                                                 | ├───────────────────────────┤ |
+|                       |                                                                 | │ 2. Rotation X             │ |
+| GÉOMÉTRIE             |                                                                 | │    Axe : [1, 0, 0]        │ |
+| [Seg] [Rect] [Arc]    |                                                                 | │  🔒 Value : 0° (Calculé)  │ |
+|                       |                                                                 | └───────────────────────────┘ |
++-----------------------+-----------------------------------------------------------------+-------------------------------+
+| BARRE DE SIMULATION & TIMELINE                                                                                          |
+| [ ▶ ] [ ⏸ ] [ ↺ Reset ] | Moteur : [dof_rot_manivelle ▾]  |  Manivelle : [───────●──────] 45.0°  |  Vitesse : 60°/s (1.0x) |
++-------------------------------------------------------------------------------------------------------------------------+
+| ⚠ STATE : Surcontrainte détectée : link_3 (PIVOT_GLISSANT) redondant avec link_4 (GLISSIERE).    [ Corriger ] [ Ignorer ]  |
++-------------------------------------------------------------------------------------------------------------------------+
