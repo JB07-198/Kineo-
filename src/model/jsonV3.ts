@@ -1,21 +1,18 @@
-// src/model/jsonV3.ts
-// TypeScript types that exactly mirror the canonical JSON v3.0 specification
-// (as defined in documentation_etape1_etape2.txt). These are the *external* model
-// used for import/export and validation.
-
 export interface Meta {
-  schemaVersion: string; // "3.0"
+  schemaVersion: '3.0';
   appVersion: string;
   title: string;
   author: string;
-  lengthUnit: string; // e.g. "mm"
-  angleUnit: string; // e.g. "deg"
+  lengthUnit: string;
+  angleUnit: string;
+  [key: string]: unknown;
 }
 
 export interface Vector3 {
   x: number;
   y: number;
   z: number;
+  [key: string]: unknown;
 }
 
 export interface Quaternion {
@@ -23,34 +20,38 @@ export interface Quaternion {
   y: number;
   z: number;
   w: number;
+  [key: string]: unknown;
 }
 
 export interface AnchorSpec {
   onClassA: Vector3;
   onClassB: Vector3;
   _comment?: string;
+  [key: string]: unknown;
 }
 
 export interface DOFSpec {
   id: string;
-  type: string; // "rotation" | "translation"
+  type: string;
   axisLocal: Vector3;
   min: number;
   max: number;
   value: number;
   unit: string;
+  [key: string]: unknown;
 }
 
 export interface Liaison {
   id: string;
   name: string;
-  type: string; // matches a key in jointDefinitions (e.g. "PIVOT")
+  type: string;
   classA: string;
   classB: string;
   position: Vector3;
   orientation: Quaternion;
   anchors: AnchorSpec;
   dof: DOFSpec[];
+  [key: string]: unknown;
 }
 
 export interface EquivalenceClass {
@@ -59,20 +60,25 @@ export interface EquivalenceClass {
   color: string;
   isFixed: boolean;
   parentId: string | null;
+  position?: Vector3;
+  rotation?: number;
+  [key: string]: unknown;
 }
 
-export interface JointDefinition {
-  [key: string]: {
-    isoCode: string;
-    dofCount: number;
-    dofTemplate: Array<{
-      type: string;
-      defaultAxisLocal: Vector3;
-      defaultMin: number;
-      defaultMax: number;
-      unit: string;
-    }>;
-  };
+export interface JointDOFTemplate {
+  type: string;
+  defaultAxisLocal: Vector3;
+  defaultMin: number;
+  defaultMax: number;
+  unit: string;
+  [key: string]: unknown;
+}
+
+export interface JointDefinitionTemplate {
+  isoCode: string;
+  dofCount: number;
+  dofTemplate: JointDOFTemplate[];
+  [key: string]: unknown;
 }
 
 export interface Kinematics {
@@ -83,32 +89,39 @@ export interface Kinematics {
     controlType: string;
     targetValue: number;
     unit: string;
+    [key: string]: unknown;
   }>;
+  [key: string]: unknown;
+}
+
+export interface GeometryStyle {
+  stroke: string;
+  width: number;
+  color: string;
+  [key: string]: unknown;
 }
 
 export interface GeometryEntity {
   id: string;
-  kind: string; // "segment", "rectangle", …
+  kind: string;
   classId: string;
   localPoints: Vector3[];
-  style: {
-    stroke: string;
-    width: number;
-    color: string;
-  };
+  style: GeometryStyle;
   view: string;
+  [key: string]: unknown;
 }
 
 export interface Geometry {
   entities: GeometryEntity[];
+  [key: string]: unknown;
 }
 
 export interface KineoV3 {
   meta: Meta;
-  jointDefinitions: JointDefinition;
+  jointDefinitions: Record<string, JointDefinitionTemplate>;
   classesEquivalence: EquivalenceClass[];
   liaisons: Liaison[];
   kinematics: Kinematics;
   geometry: Geometry;
+  [key: string]: unknown;
 }
-

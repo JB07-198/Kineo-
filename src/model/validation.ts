@@ -1,103 +1,111 @@
-// src/model/validation.ts
-// Validation of the canonical JSON v3.0 specification using Zod.
-
 import { z } from 'zod';
 import type { KineoV3 } from './jsonV3';
 
 const Vector3Schema = z.object({
-  x: z.number(),
-  y: z.number(),
-  z: z.number(),
-});
+  x: z.number().finite(),
+  y: z.number().finite(),
+  z: z.number().finite(),
+}).passthrough();
 
 const QuaternionSchema = z.object({
-  x: z.number(),
-  y: z.number(),
-  z: z.number(),
-  w: z.number(),
-});
+  x: z.number().finite(),
+  y: z.number().finite(),
+  z: z.number().finite(),
+  w: z.number().finite(),
+}).passthrough();
 
 const AnchorSpecSchema = z.object({
-  _comment: z.string().optional(),
   onClassA: Vector3Schema,
   onClassB: Vector3Schema,
-});
+  _comment: z.string().optional(),
+}).passthrough();
 
 const DOFSpecSchema = z.object({
-  id: z.string(),
-  type: z.string(), // "rotation" | "translation"
+  id: z.string().min(1),
+  type: z.string().min(1),
   axisLocal: Vector3Schema,
-  min: z.number(),
-  max: z.number(),
-  value: z.number(),
+  min: z.number().finite(),
+  max: z.number().finite(),
+  value: z.number().finite(),
   unit: z.string(),
+}).passthrough().superRefine((dof, context) => {
+  if (dof.min > dof.max) {
+    context.addIssue({ code: 'custom', message: 'DOF minimum must not exceed its maximum', path: ['min'] });
+  }
+  if (dof.value < dof.min || dof.value > dof.max) {
+    context.addIssue({ code: 'custom', message: 'DOF value must be within its limits', path: ['value'] });
+  }
 });
 
 const LiaisonSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1),
   name: z.string(),
-  type: z.string(), // must match a key of jointDefinitions
-  classA: z.string(),
-  classB: z.string(),
+  type: z.string().min(1),
+  classA: z.string().min(1),
+  classB: z.string().min(1),
   position: Vector3Schema,
   orientation: QuaternionSchema,
   anchors: AnchorSpecSchema,
   dof: z.array(DOFSpecSchema),
-});
+}).passthrough();
 
 const EquivalenceClassSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1),
   name: z.string(),
   color: z.string(),
   isFixed: z.boolean(),
   parentId: z.string().nullable(),
-});
+  position: Vector3Schema.optional(),
+  rotation: z.number().finite().optional(),
+}).passthrough();
 
 const JointDefinitionTemplateSchema = z.object({
   isoCode: z.string(),
-  dofCount: z.number(),
-  dofTemplate: z.array(
-    z.object({
-      type: z.string(),
-      defaultAxisLocal: Vector3Schema,
-      defaultMin: z.number(),
-      defaultMax: z.number(),
-      unit: z.string(),
-    })
-  ),
+  dofCount: z.number().int().nonnegative(),
+  dofTemplate: z.array(z.object({
+    type: z.string(),
+    defaultAxisLocal: Vector3Schema,
+    defaultMin: z.number().finite(),
+    defaultMax: z.number().finite(),
+    unit: z.string(),
+  }).passthrough()),
+}).passthrough().superRefine((definition, context) => {
+  if (definition.dofCount !== definition.dofTemplate.length) {
+    context.addIssue({ code: 'custom', message: 'DOF count must match the template length', path: ['dofCount'] });
+  }
 });
 
-const JointDefinitionsSchema = z.record(JointDefinitionTemplateSchema);
+const JointDefinitionsSchema = z.record(z.string(), JointDefinitionTemplateSchema);
 
 const DrivenDOFSchema = z.object({
-  dofId: z.string(),
+  dofId: z.string().min(1),
   controlType: z.string(),
-  targetValue: z.number(),
+  targetValue: z.number().finite(),
   unit: z.string(),
-});
+}).passthrough();
 
 const KinematicsSchema = z.object({
   solverType: z.string(),
   closedLoopMode: z.boolean(),
   drivenDofs: z.array(DrivenDOFSchema),
-});
+}).passthrough();
 
 const GeometryEntitySchema = z.object({
-  id: z.string(),
+  id: z.string().min(1),
   kind: z.string(),
-  classId: z.string(),
+  classId: z.string().min(1),
   localPoints: z.array(Vector3Schema),
   style: z.object({
     stroke: z.string(),
-    width: z.number(),
+    width: z.number().finite().nonnegative(),
     color: z.string(),
-  }),
+  }).passthrough(),
   view: z.string(),
-});
+}).passthrough();
 
 const GeometrySchema = z.object({
   entities: z.array(GeometryEntitySchema),
-});
+}).passthrough();
 
 export const KineoV3Schema = z.object({
   meta: z.object({
@@ -107,21 +115,14 @@ export const KineoV3Schema = z.object({
     author: z.string(),
     lengthUnit: z.string(),
     angleUnit: z.string(),
-  }),
+  }).passthrough(),
   jointDefinitions: JointDefinitionsSchema,
   classesEquivalence: z.array(EquivalenceClassSchema),
   liaisons: z.array(LiaisonSchema),
   kinematics: KinematicsSchema,
   geometry: GeometrySchema,
-});
+}).passthrough();
 
-/**
- * Validate an unknown object against the JSON v3.0 schema.
- * @param data The raw data (e.g. parsed JSON).
- * @returns The typed KineoV3 document if validation succeeds.
- * @throws ZodError with detailed validation information otherwise.
- */
 export function validateKineoV3(data: unknown): KineoV3 {
   return KineoV3Schema.parse(data);
 }
-

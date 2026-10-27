@@ -1,5 +1,11 @@
 # Kineo — Project Status Audit & Roadmap
 
+> Historical baseline audit before the v0.0/v0.1 implementation. Its defect and
+> roadmap tables describe that baseline, not the current working tree. See
+> [`../docs/V0.0_FOUNDATION.md`](../docs/V0.0_FOUNDATION.md),
+> [`../docs/V0.1_2D_EDITOR.md`](../docs/V0.1_2D_EDITOR.md), and
+> [`../docs/TEST_RESULTS.md`](../docs/TEST_RESULTS.md) for current status.
+
 **Repository:** `C:\Users\Toshiba\Kineo-` → `https://github.com/JB07-198/Kineo-`
 **Audit date:** 2026-10-27 · **Audited revision:** working tree at HEAD `b34cef1`
 **Method:** static reading of every source file, `tsc -b`, `eslint .`, isolated-build experiment (syntax repaired in a throw-away copy), runtime harness over the model layer, `git` inspection of local + remote state.

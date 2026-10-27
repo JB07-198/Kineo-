@@ -1,91 +1,117 @@
-// src/model/conversion.ts
-// Conversion utilities between the external canonical JSON v3.0 model (KineoV3)
-// and the internal TypeScript model used by the store (KineoDocument).
-
 import type { KineoV3 } from './jsonV3';
 import type { KineoDocument } from '../types/kineo';
 
-/**
- * Convert a parsed KineoV3 object (external schema) to the internal KineoDocument.
- * At the moment the internal model mirrors the external one, so this is a shallow copy.
- * Future adaptations can map field names or perform transformations here.
- */
 export function toInternalModel(external: KineoV3): KineoDocument {
-  // Direct cast – both interfaces share the same structural shape.
-  // Types are compatible because KineoDocument includes the same fields
-  // (meta, metadata?, classesEquivalence, anchors, jointDefinitions, liaisons,
-  // kinematics, geometry, dofTemplate, version).
-  const internal = external as unknown as KineoDocument;
-  return internal;
+  return structuredClone(external);
 }
 
-/**
- * Convert an internal KineoDocument back to the canonical external KineoV3 format.
- */
 export function fromInternalModel(internal: KineoDocument): KineoV3 {
-  // Ensure we return an object that satisfies KineoV3.
-  const external = internal as unknown as KineoV3;
-  return external;
+  return structuredClone(internal);
 }
 
-/**
- * Validate that all identifier references inside the document are coherent.
- * Throws an Error with a descriptive message if an inconsistency is found.
- */
-export function validateReferences(doc: KineoDocument): void {
-  const classIds = new Set(doc.classesEquivalence.map((c) => c.id));
-  // const anchorIds = new Set(doc.anchors.map((a) => a.id)); // not needed for current checks
+export function validateReferences(doc: KineoV3): void {
+  assertUniqueIds(doc.classesEquivalence.map(({ id }) => id), 'class');
+  assertUniqueIds(doc.liaisons.map(({ id }) => id), 'joint');
+  assertUniqueIds(doc.geometry.entities.map(({ id }) => id), 'geometry');
 
-  // Check liaisons class references
-  doc.liaisons?.forEach((l) => {
-    if (!classIds.has(l.classA)) {
-      throw new Error(`Liaison ${l.id} references unknown classA ${l.classA}`);
-    }
-    if (!classIds.has(l.classB)) {
-      throw new Error(`Liaison ${l.id} references unknown classB ${l.classB}`);
-    }
-    // anchors inside liaison are not stored separately, they are coordinates.
-  });
+  const classes = new Map(doc.classesEquivalence.map((item) => [item.id, item]));
+  const dofIds = new Set<string>();
 
-  // Check joint definitions ids against liaisons types
-  const jointTypes = Object.keys(doc.jointDefinitions);
-  doc.liaisons?.forEach((l) => {
-    if (!jointTypes.includes(l.type)) {
-      throw new Error(`Liaison ${l.id} uses unknown joint type ${l.type}`);
+  for (const body of doc.classesEquivalence) {
+    if (body.parentId !== null && !classes.has(body.parentId)) {
+      throw new Error(`Class ${body.id} references unknown parent ${body.parentId}`);
     }
-  });
+    if (body.parentId === body.id) {
+      throw new Error(`Class ${body.id} cannot be its own parent`);
+    }
+    const ancestors = new Set([body.id]);
+    let parentId = body.parentId;
+    while (parentId !== null) {
+      if (ancestors.has(parentId)) {
+        throw new Error(`Class hierarchy contains a cycle at ${parentId}`);
+      }
+      ancestors.add(parentId);
+      parentId = classes.get(parentId)?.parentId ?? null;
+    }
+  }
+
+  for (const joint of doc.liaisons) {
+    if (!classes.has(joint.classA)) {
+      throw new Error(`Joint ${joint.id} references unknown classA ${joint.classA}`);
+    }
+    if (!classes.has(joint.classB)) {
+      throw new Error(`Joint ${joint.id} references unknown classB ${joint.classB}`);
+    }
+    if (joint.classA === joint.classB) {
+      throw new Error(`Joint ${joint.id} cannot connect a class to itself`);
+    }
+    if (!doc.jointDefinitions[joint.type]) {
+      throw new Error(`Joint ${joint.id} uses unknown type ${joint.type}`);
+    }
+    for (const dof of joint.dof) {
+      if (dofIds.has(dof.id)) {
+        throw new Error(`Duplicate degree-of-freedom id ${dof.id}`);
+      }
+      dofIds.add(dof.id);
+    }
+  }
+
+  for (const entity of doc.geometry.entities) {
+    if (!classes.has(entity.classId)) {
+      throw new Error(`Geometry ${entity.id} references unknown class ${entity.classId}`);
+    }
+  }
+
+  for (const drivenDof of doc.kinematics.drivenDofs) {
+    if (!dofIds.has(drivenDof.dofId)) {
+      throw new Error(`Driven degree of freedom references unknown id ${drivenDof.dofId}`);
+    }
+  }
 }
 
-/**
- * Detect loss of information when converting between models.
- * Returns an array of paths that were dropped (if any).
- */
-export function detectConversionLosses(original: KineoV3, converted: KineoV3): string[] {
+function assertUniqueIds(ids: string[], entity: string): void {
+  const seen = new Set<string>();
+  for (const id of ids) {
+    if (seen.has(id)) {
+      throw new Error(`Duplicate ${entity} id ${id}`);
+    }
+    seen.add(id);
+  }
+}
+
+export function detectConversionLosses(original: unknown, converted: unknown): string[] {
   const losses: string[] = [];
-  const recurse = (orig: any, conv: any, path: string) => {
-    if (typeof orig !== typeof conv) {
-      losses.push(path);
+
+  const compare = (source: unknown, target: unknown, path: string): void => {
+    if (typeof source !== typeof target || source === null || target === null) {
+      if (source !== target) losses.push(path || '<root>');
       return;
     }
-    if (orig && typeof orig === 'object') {
-      if (Array.isArray(orig)) {
-        if (!Array.isArray(conv) || orig.length !== conv.length) {
-          losses.push(path);
-          return;
-        }
-        orig.forEach((v, i) => recurse(v, conv[i], `${path}[${i}]`));
-      } else {
-        for (const key of Object.keys(orig)) {
-          if (!(key in conv)) {
-            losses.push(`${path}.${key}`);
-          } else {
-            recurse(orig[key], conv[key], path ? `${path}.${key}` : key);
-          }
+    if (Array.isArray(source)) {
+      if (!Array.isArray(target) || source.length !== target.length) {
+        losses.push(path || '<root>');
+        return;
+      }
+      source.forEach((value, index) => compare(value, target[index], `${path}[${index}]`));
+      return;
+    }
+    if (typeof source === 'object') {
+      if (typeof target !== 'object' || target === null || Array.isArray(target)) {
+        losses.push(path || '<root>');
+        return;
+      }
+      for (const [key, value] of Object.entries(source)) {
+        if (!(key in target)) {
+          losses.push(path ? `${path}.${key}` : key);
+        } else {
+          compare(value, (target as Record<string, unknown>)[key], path ? `${path}.${key}` : key);
         }
       }
+    } else if (source !== target) {
+      losses.push(path || '<root>');
     }
   };
-  recurse(original, converted, '');
+
+  compare(original, converted, '');
   return losses;
 }
-

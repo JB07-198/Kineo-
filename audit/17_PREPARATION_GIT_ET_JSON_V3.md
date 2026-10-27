@@ -1,5 +1,9 @@
 # Préparation Git & Analyse du Schéma JSON v3.0
 
+> Analyse de référence antérieure à l’implémentation v0.0/v0.1. Les écarts décrits
+> ici sont historiques; voir `../docs/V0.0_FOUNDATION.md` et
+> `../docs/V0.1_2D_EDITOR.md` pour l’état actuel.
+
 ## 1️⃣ État Git exact (au **2026‑10‑27 05:18 UTC+1**) 
 
 | Catégorie | Fichiers | Commentaire |
@@ -139,4 +143,3 @@ git commit -m "Initial project snapshot – audit 03C – include JSON v3.0 spec
 
 *Rapport généré le **2026‑10‑27 05:18 UTC+1** et stocké à*:
 `C:/Users/Toshiba/Kineo-/audit/17_PREPARATION_GIT_ET_JSON_V3.md`
-

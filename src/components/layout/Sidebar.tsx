@@ -1,80 +1,127 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useKineoStore } from '../../store/useKineoStore';
-import type { JointType } from '../../types/kineo'; // <-- Ajouter 'type' ici
 
-const JOINTS: { type: JointType; label: string; icon: string }[] = [
-    { type: 'Pivoting', label: 'Pivot', icon: '🔄' },
-    { type: 'Prismatic', label: 'Glissière', icon: '↔️' },
-    { type: 'Cylindrical', label: 'Pivot Glissant', icon: '🌀' },
-    { type: 'Spherical', label: 'Rotule', icon: '⚽' },
-    { type: 'Planar', label: 'Appui Plan', icon: '📐' },
-    { type: 'Helicoidal', label: 'Hélicoïdale', icon: '🔩' },
-    { type: 'Fixed', label: 'Encastrement', icon: '🔒' },
+const JOINTS = [
+  { type: 'PIVOT', label: 'Pivot', symbol: '○' },
+  { type: 'GLISSIERE', label: 'Glissière', symbol: '▤' },
+  { type: 'PIVOT_GLISSANT', label: 'Pivot glissant', symbol: '⊙↔' },
+  { type: 'ROTULE', label: 'Rotule', symbol: '◎' },
+  { type: 'APPUI_PLAN', label: 'Appui plan', symbol: '△' },
+  { type: 'HELICOIDALE', label: 'Hélicoïdale', symbol: '⟳' },
+  { type: 'ENCASTREMENT', label: 'Encastrement', symbol: '⊣' },
 ];
 
 export const Sidebar: React.FC = () => {
-    const { document, addClass, selectEntity } = useKineoStore();
+  const { document, selectedEntityId, selectedEntityType, addClass, addJoint, selectEntity } = useKineoStore();
+  const [filter, setFilter] = useState('');
+  const bodies = document.classesEquivalence;
+  const visibleBodies = bodies.filter((body) => body.name.toLowerCase().includes(filter.toLowerCase()));
+  const visibleJoints = document.liaisons.filter((joint) => joint.name.toLowerCase().includes(filter.toLowerCase()));
 
-    return (
-        <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col h-full select-none">
-            {/* Bibliothèques de liaisons ISO */}
-            <div className="p-4 border-b border-slate-800">
-                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
-                    Liaisons ISO / AFNOR
-                </h2>
-                <div className="grid grid-cols-2 gap-2">
-                    {JOINTS.map((j) => (
-                        <button
-                            key={j.type}
-                            className="flex flex-col items-center justify-center p-2.5 bg-slate-800/60 hover:bg-indigo-600/20 hover:border-indigo-500/50 border border-slate-700/50 rounded-lg transition-all text-center group"
-                        >
-                            <span className="text-xl mb-1 group-hover:scale-110 transition-transform">{j.icon}</span>
-                            <span className="text-[11px] font-medium text-slate-300 group-hover:text-white">{j.label}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
+  const createBody = () => {
+    const offset = Math.max(0, bodies.length - 4);
+    addClass(`Solide ${bodies.length}`, { x: 250 + offset * 25, y: offset * 25, z: 0 });
+  };
 
-            {/* Arborescence des Classes d'Équivalence */}
-            <div className="p-4 flex-1 overflow-y-auto">
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        Classes (Solides)
-                    </h2>
-                    <button
-                        onClick={() =>
-                            addClass({
-                                name: `Solide ${document.classesEquivalence.length}`,
-                                color: `#${Math.floor(Math.random() * 16777215).toString(16)}`,
-                                isGround: false,
-                            })
-                        }
-                        className="text-xs text-indigo-400 hover:text-indigo-300 font-bold"
-                    >
-                        + Ajouter
-                    </button>
-                </div>
+  const createJoint = (type: string) => {
+    const selectedBody = selectedEntityType === 'Class'
+      ? bodies.find((body) => body.id === selectedEntityId)
+      : undefined;
+    const secondBody = selectedBody?.isFixed
+      ? bodies.find((body) => !body.isFixed)
+      : selectedBody ?? bodies.find((body) => !body.isFixed);
+    const ground = bodies.find((body) => body.isFixed);
+    if (!ground || !secondBody || ground.id === secondBody.id) return;
+    const first = ground.position ?? { x: 0, y: 0, z: 0 };
+    const second = secondBody.position ?? { x: 0, y: 0, z: 0 };
+    addJoint(type, ground.id, secondBody.id, {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+      z: (first.z + second.z) / 2,
+    });
+  };
 
-                <ul className="space-y-1.5">
-                    {document.classesEquivalence.map((cls) => (
-                        <li
-                            key={cls.id}
-                            onClick={() => selectEntity(cls.id, 'Class')}
-                            className="flex items-center justify-between p-2 rounded-md bg-slate-800/40 hover:bg-slate-800 border border-slate-700/30 cursor-pointer text-xs"
-                        >
-                            <div className="flex items-center space-x-2">
-                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: cls.color }} />
-                                <span className="font-medium text-slate-200">{cls.name}</span>
-                            </div>
-                            {cls.isGround && (
-                                <span className="text-[10px] bg-slate-700 px-1.5 py-0.5 rounded text-slate-400 font-semibold">
-                                    Bâti
-                                </span>
-                            )}
-                        </li>
-                    ))}
-                </ul>
-            </div>
-        </aside>
-    );
+  return (
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-300">
+      <div className="border-b border-slate-800 p-3">
+        <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Liaisons ISO / AFNOR</h2>
+        <div className="grid grid-cols-2 gap-1.5">
+          {JOINTS.map((joint) => (
+            <button
+              key={joint.type}
+              onClick={() => createJoint(joint.type)}
+              title={`Ajouter une liaison ${joint.label} entre le bâti et le solide sélectionné`}
+              className="flex min-h-14 flex-col items-center justify-center rounded-md border border-slate-700/70 bg-slate-800/60 px-1 py-1.5 transition-colors hover:border-indigo-500 hover:bg-indigo-600/20"
+            >
+              <span className="text-xl leading-6 text-indigo-300">{joint.symbol}</span>
+              <span className="text-[10px] font-medium">{joint.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2.5">
+        <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pièces et liaisons</h2>
+        <button onClick={createBody} className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">
+          + Solide
+        </button>
+      </div>
+      <div className="border-b border-slate-800 px-3 py-2">
+        <input
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
+          aria-label="Rechercher une pièce ou une liaison"
+          placeholder="Rechercher…"
+          className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+        />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <h3 className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Solides</h3>
+        <ul className="space-y-1">
+          {visibleBodies.map((body) => (
+            <li key={body.id}>
+              <button
+                onClick={() => selectEntity(body.id, 'Class')}
+                className={`flex w-full items-center gap-2 rounded-md border px-2 py-2 text-left text-xs ${
+                  selectedEntityId === body.id && selectedEntityType === 'Class'
+                    ? 'border-indigo-500/60 bg-indigo-500/15'
+                    : 'border-transparent bg-slate-800/40 hover:bg-slate-800'
+                }`}
+              >
+                <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: body.color }} />
+                <span className="min-w-0 flex-1 truncate">{body.name}</span>
+                {body.isFixed && <span className="rounded bg-slate-700 px-1 text-[9px] text-slate-300">Bâti</span>}
+              </button>
+            </li>
+          ))}
+          {visibleBodies.length === 0 && <li className="px-2 py-2 text-xs text-slate-500">Aucun solide trouvé.</li>}
+        </ul>
+
+        <h3 className="mt-4 px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          Liaisons ({document.liaisons.length})
+        </h3>
+        <ul className="space-y-1">
+          {visibleJoints.map((joint) => (
+            <li key={joint.id}>
+              <button
+                onClick={() => selectEntity(joint.id, 'Joint')}
+                className={`flex w-full items-center gap-2 rounded-md border px-2 py-2 text-left text-xs ${
+                  selectedEntityId === joint.id && selectedEntityType === 'Joint'
+                    ? 'border-indigo-500/60 bg-indigo-500/15'
+                    : 'border-transparent bg-slate-800/40 hover:bg-slate-800'
+                }`}
+              >
+                <span className="w-5 shrink-0 text-center text-indigo-300">
+                  {JOINTS.find((item) => item.type === joint.type)?.symbol ?? '○'}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{joint.name}</span>
+              </button>
+            </li>
+          ))}
+          {visibleJoints.length === 0 && <li className="px-2 py-2 text-xs text-slate-500">Aucune liaison trouvée.</li>}
+        </ul>
+      </div>
+    </aside>
+  );
 };
