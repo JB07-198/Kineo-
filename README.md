@@ -1,8 +1,9 @@
 # Kineo
 
 Kineo is a browser-based editor for planar mechanical diagrams. It uses the canonical
-JSON v3.0 format described in [`documentation_etape1_etape2.txt`](./documentation_etape1_etape2.txt)
-and starts with a slider-crank (bielle-manivelle-piston) example.
+JSON v3.0 format described in [`documentation_etape1_etape2.txt`](./documentation_etape1_etape2.txt).
+The initial workspace demonstrates a slider-crank; **Nouveau** creates an empty
+mechanism, and **Exemple** reloads the demonstration explicitly.
 
 ## Requirements
 
@@ -46,6 +47,15 @@ automatically inside GitHub Actions.
 - Use **Ctrl/Cmd + Z** and **Ctrl/Cmd + Y** (or the toolbar) to undo and redo document edits.
 - **Ouvrir** validates JSON v3.0, including referential integrity; **Enregistrer JSON**
   downloads the current document.
+- **Nouveau** creates an empty v3.0 document. **Exemple** explicitly loads the
+  slider-crank demonstration.
+- **PNG 1600 px** and **PNG HD** export white-background report diagrams; SVG is
+  vector output. Joint endpoints use each body's local anchor coordinates, and
+  disagreement is shown as a warning rather than hidden by moving the mechanism.
+- Body/joint labels are shared between the canvas and exports and are placed to avoid
+  geometry and label overlaps in the tested representative scenes. Dense diagrams
+  may still look busy. Joint glyphs are schematic and are not formally ISO/AFNOR
+  certified.
 
 The connectivity graph describes topology only; it does not solve constraints or
 calculate mobility. Split View synchronizes the 2D editor and graph. The graph,
@@ -55,9 +65,11 @@ SVG/PNG export, and document unsaved-change protection are documented in
 Use **Graph** to inspect body/joint connectivity or **Split** for synchronized 2D and
 graph views. **Exporter SVG** and **Exporter PNG** create visual outputs; JSON remains
 the editable document. Creating a new document or opening another prompts before
-discarding unsaved changes.
+discarding unsaved changes. The graph describes connectivity only; Kineo does not yet
+solve constraints or simulate mechanism motion.
 
 See [`docs/V0.0_FOUNDATION.md`](./docs/V0.0_FOUNDATION.md),
 [`docs/V0.1_2D_EDITOR.md`](./docs/V0.1_2D_EDITOR.md),
 [`docs/V0.2_GRAPH_PERSISTENCE.md`](./docs/V0.2_GRAPH_PERSISTENCE.md), and
+[`docs/FINAL_VALIDATION_V0.2.md`](./docs/FINAL_VALIDATION_V0.2.md) and
 [`docs/TEST_RESULTS.md`](./docs/TEST_RESULTS.md) for implementation and verification details.

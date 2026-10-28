@@ -54,8 +54,10 @@ src/
 │   ├── mechanicalGraph.ts          Derived topology, components, parallel edges, cycles
 │   ├── graphLayout.ts              Deterministic transient component layout
 │   ├── planarCoordinates.ts        Shared planar transforms and quaternion yaw
-│   ├── export2d.ts                 Standalone SVG and browser PNG rendering
-│   ├── defaultDocument.ts          Joint catalogue and slider-crank example
+│   ├── planarScene.ts              Shared geometry, anchors, labels and scene bounds
+│   ├── jointSymbols.ts             Reusable schematic 2D joint glyphs
+│   ├── export2d.ts                 White SVG and report-size browser PNG rendering
+│   ├── defaultDocument.ts          Empty document and slider-crank factories
 │   └── __tests__/                   Schema, graph, export, store and integrity tests
 ├── store/useKineoStore.ts          Document CRUD, selection, history and UI settings
 └── types/kineo.ts                  Application aliases for the canonical document
@@ -93,30 +95,53 @@ removes driven-DOF references, and clears child `parentId` values. The ground bo
 cannot be deleted or moved. Deleting a joint also removes driven references to its
 DOFs.
 
-Body placement creates a local segment; the default example additionally has a
-ground rail and a slider block. New joints connect the selected body to ground by
-default; the inspector can change either endpoint. Dragging a body updates attached
-joint world positions using local anchors. Dragging a joint updates its anchor
-coordinates in both connected body frames.
+Body placement creates a local segment. The default slider-crank example additionally
+has two fixed horizontal guide rails, support hatching, and a distinct slider-body
+rectangle. Its static reference pose preserves the 70-unit crank and 120-unit rod;
+the slider position is chosen to place B on the horizontal axis with all attachment
+anchors coincident. This pose setup does not solve or animate the mechanism. New
+joints connect the selected body to ground by default; the inspector can change
+either endpoint. Dragging a body updates attached joint world positions using local
+anchors. Dragging a joint updates its anchor coordinates in both connected body
+frames.
 
 The canvas maps document coordinates into CSS pixels, accounts for device pixel ratio,
 and observes viewport resizing. Wheel/toolbar controls zoom around the cursor or
 viewport; Shift-drag pans; body and joint dragging supports grid snapping. Clicking
 canvas geometry or a joint selects the corresponding document entity.
 
+`buildPlanarScene` is shared by the canvas and SVG/PNG export path. It transforms
+geometry and both local joint anchors using their respective body poses, measures
+anchor disagreement without altering the assembly, lays out labels against geometry
+and other label bounds, and supplies scene bounds for fit/export. Canvas label text
+scales with viewport zoom. Joint glyph geometry is shared by both renderers; symbols
+are schematic and have not received formal ISO/AFNOR certification.
+The canvas/export keep body geometry, joint glyphs, anchor diagnostics, ground
+markers, guide/support geometry, and labels as separate drawing layers. The
+prismatic glyph shows an oriented slider and guide with hatching, while revolute
+glyphs retain circular articulations; at a shared slider/pivot location, the pivot
+is drawn above the guide. Unfamiliar extension types use a neutral diamond/cross
+instead of being mislabeled as a known constraint.
+
 ## UI and persistence
 
 - **Ouvrir** reads a selected JSON file, parses it, validates v3.0 shape and references,
   then replaces the active document. If unsaved changes exist, replacement requires
   explicit confirmation.
-- **Nouveau** also confirms before discarding unsaved changes. Dirty state compares the
-  canonical document with the last open/new/save baseline and respects undo/redo.
+- **Nouveau** starts from a valid empty JSON v3.0 document and confirms before
+  discarding unsaved changes. **Exemple** explicitly loads the slider-crank. Dirty
+  state compares the canonical document with the last open/new/save baseline and
+  respects undo/redo.
 - **Enregistrer JSON** downloads a formatted JSON v3.0 document and marks the active
   document saved.
-- **Exporter SVG/PNG** exports a standalone 2D rendering, separate from editable JSON.
+- **Exporter SVG/PNG** exports a standalone white-background rendering, separate from
+  editable JSON. PNG actions target 1600 px and 2400 px widths.
+- Local anchor disagreement is visible through connectors and a distance warning.
+  Circular attachment markers are used for pivots, not prismatic joints. The
+  renderer does not disguise disagreement by changing body or joint data.
 - **Ctrl/Cmd+Z**, **Ctrl/Cmd+Y**, and **Ctrl/Cmd+Shift+Z** provide undo/redo.
-- The joint library includes pivot, slider, cylindrical, spherical, planar, helical
-  and fixed symbols.
+- The joint library includes pivot, prismatic, pivot-sliding, spherical, planar,
+  helical, and fixed schematic symbols.
 - Graph View derives nodes from rigid bodies and edges only from liaison instances.
   Split View displays the 2D editor and graph side-by-side; both share the same store
   selection and canonical document.
@@ -129,6 +154,8 @@ canvas geometry or a joint selects the corresponding document entity.
 
 - No kinematic solve, computed mobility/hyperstatism, motion playback or DOF driver UI.
 - No 3D modeling, geometry drawing tools or autosave.
+- Dense diagrams with long labels and multiple warnings can look crowded even though
+  representative fixture label bounds are collision-checked.
 - A graph cycle indicates connectivity topology only; it is not proof of geometrical
   assembly or solvability.
 - The standard joint symbols are schematic 2D representations; formal ISO/AFNOR

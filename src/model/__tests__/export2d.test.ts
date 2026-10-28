@@ -50,15 +50,16 @@ describe('2D SVG export', () => {
     expect(markup).toContain('Parallel test pivot');
   });
 
-  it('produces a minimal non-zero image bounds for an empty document', () => {
+  it('produces an intentional white empty-state image with non-zero bounds', () => {
     const document = createDefaultDocument();
     document.classesEquivalence = [];
     document.liaisons = [];
     document.geometry.entities = [];
     const exported = createSvgExport(document);
-    expect(exported.width).toBe(100);
-    expect(exported.height).toBe(100);
-    expect(exported.markup).toContain('width="100" height="100" viewBox="0 0 100 100"');
+    expect(exported.width).toBeGreaterThan(100);
+    expect(exported.height).toBeGreaterThan(100);
+    expect(exported.markup).toContain('fill="#ffffff"');
+    expect(exported.markup).toContain('Document vide — aucun élément');
   });
 
   it('rejects invalid geometry references rather than omitting the representation', () => {
@@ -69,7 +70,7 @@ describe('2D SVG export', () => {
 
   it('rejects invalid or oversized PNG rendering requests before allocating a canvas', async () => {
     await expect(renderSvgAsPng('<svg/>')).rejects.toThrow(/viewBox/);
-    await expect(renderSvgAsPng('<svg viewBox="0 0 100 100"/>', 0)).rejects.toThrow(/pixel scale/);
-    await expect(renderSvgAsPng('<svg viewBox="0 0 10000 100"/>')).rejects.toThrow(/safe browser canvas limit/);
+    await expect(renderSvgAsPng('<svg viewBox="0 0 100 100"/>', 0)).rejects.toThrow(/target width/);
+    await expect(renderSvgAsPng('<svg viewBox="0 0 100 100"/>', 9000)).rejects.toThrow(/safe browser canvas limit/);
   });
 });

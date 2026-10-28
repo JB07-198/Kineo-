@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { fromInternalModel, validateReferences } from '../../model/conversion';
-import { createDefaultDocument } from '../../model/defaultDocument';
+import { createDefaultDocument, createEmptyKineoDocument } from '../../model/defaultDocument';
 import { createSvgExport, renderSvgAsPng } from '../../model/export2d';
 import { validateKineoV3 } from '../../model/validation';
 import { useKineoStore } from '../../store/useKineoStore';
@@ -61,8 +61,18 @@ export const Header: React.FC = () => {
       setMessage('Nouveau document annulé — les modifications sont conservées.');
       return;
     }
+    replaceDocument(createEmptyKineoDocument());
+    setMessage('Nouveau mécanisme vide créé.');
+  };
+
+  const loadSliderCrankExample = () => {
+    if (JSON.stringify(document) !== savedDocumentJson &&
+        !window.confirm('Les modifications non enregistrées seront perdues. Charger l’exemple ?')) {
+      setMessage('Chargement de l’exemple annulé — les modifications sont conservées.');
+      return;
+    }
     replaceDocument(createDefaultDocument());
-    setMessage('Nouveau mécanisme créé.');
+    setMessage('Exemple bielle-manivelle-piston chargé.');
   };
 
   const saveDocument = () => {
@@ -86,12 +96,12 @@ export const Header: React.FC = () => {
     }
   };
 
-  const exportPng = async () => {
+  const exportPng = async (targetWidth: number) => {
     try {
       const { markup } = createSvgExport(document);
-      const blob = await renderSvgAsPng(markup);
+      const blob = await renderSvgAsPng(markup, targetWidth);
       downloadBlob(`${document.meta.title.trim().replace(/[^a-z0-9_-]+/gi, '-') || 'kineo-mechanism'}.png`, blob);
-      setMessage('Export PNG terminé.');
+      setMessage(`Export PNG ${targetWidth}px terminé.`);
     } catch (error) {
       setMessage(error instanceof Error ? `Export PNG impossible : ${error.message}` : 'Export PNG impossible.');
     }
@@ -113,8 +123,11 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-1">
-        <button className="toolbar-button" onClick={createNewDocument} title="Nouveau mécanisme (exemple bielle-manivelle)">
+        <button className="toolbar-button" onClick={createNewDocument} title="Créer un mécanisme vide">
           Nouveau
+        </button>
+        <button className="toolbar-button" onClick={loadSliderCrankExample} title="Charger l’exemple bielle-manivelle-piston">
+          Exemple
         </button>
         <button className="toolbar-button" onClick={() => fileInput.current?.click()}>Ouvrir</button>
         <input
@@ -126,7 +139,8 @@ export const Header: React.FC = () => {
         />
         <button className="toolbar-button" onClick={saveDocument}>Enregistrer JSON</button>
         <button className="toolbar-button" onClick={exportSvg}>Exporter SVG</button>
-        <button className="toolbar-button" onClick={() => void exportPng()}>Exporter PNG</button>
+        <button className="toolbar-button" onClick={() => void exportPng(1600)} title="PNG rapport — 1600 px de large">PNG 1600 px</button>
+        <button className="toolbar-button" onClick={() => void exportPng(2400)} title="PNG haute qualité — 2400 px de large">PNG HD</button>
         <span className="mx-1 h-6 border-l border-slate-700" />
         <button className="toolbar-button" disabled={!undoStack.length} onClick={undo} title="Annuler (Ctrl+Z)">↶</button>
         <button className="toolbar-button" disabled={!redoStack.length} onClick={redo} title="Rétablir (Ctrl+Y)">↷</button>

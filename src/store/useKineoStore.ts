@@ -14,6 +14,7 @@ interface KineoState {
   activeAppMode: 'Edit' | 'Simulation';
   selectedEntityId: string | null;
   selectedEntityType: SelectionType | null;
+  documentRevision: number;
   savedDocumentJson: string;
   gridVisible: boolean;
   snapEnabled: boolean;
@@ -147,6 +148,7 @@ export const useKineoStore = create<KineoState>((set) => ({
   activeAppMode: 'Edit',
   selectedEntityId: null,
   selectedEntityType: null,
+  documentRevision: 0,
   savedDocumentJson: initialSavedDocumentJson,
   gridVisible: true,
   snapEnabled: true,
@@ -431,6 +433,7 @@ export const useKineoStore = create<KineoState>((set) => ({
       redoStack: [],
       selectedEntityId: null,
       selectedEntityType: null,
+      documentRevision: state.documentRevision + 1,
     }));
   },
 

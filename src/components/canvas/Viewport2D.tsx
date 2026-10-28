@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useKineoStore } from '../../store/useKineoStore';
-import { localToWorld2D, quaternionYaw } from '../../model/planarCoordinates';
-import type { GeometryEntity, Quaternion, Vector3 } from '../../model/jsonV3';
+import { buildPlanarScene, type SceneLabel } from '../../model/planarScene';
+import { getJointGlyph } from '../../model/jointSymbols';
+import type { Vector3 } from '../../model/jsonV3';
 
 type Point = { x: number; y: number };
 type View = { scale: number; center: Point };
@@ -41,95 +42,65 @@ function isPointInPolygon(point: Point, polygon: Point[]): boolean {
   return inside;
 }
 
-function entityWorldPoints(entity: GeometryEntity, position: Vector3, rotation: number): Point[] {
-  const localPoints = entity.localPoints;
-  if (entity.kind === 'rectangle' && localPoints.length >= 2) {
-    const first = localPoints[0];
-    const second = localPoints[1];
-    const left = Math.min(first.x, second.x);
-    const right = Math.max(first.x, second.x);
-    const bottom = Math.min(first.y, second.y);
-    const top = Math.max(first.y, second.y);
-    return [
-      { x: left, y: bottom },
-      { x: right, y: bottom },
-      { x: right, y: top },
-      { x: left, y: top },
-    ].map((point) => localToWorld2D({ ...point, z: 0 }, position, rotation));
-  }
-  return localPoints.map((point) => localToWorld2D(point, position, rotation));
-}
-
-function drawJointSymbol(
+function drawJointGlyph(
   context: CanvasRenderingContext2D,
   type: string,
   center: Point,
+  angle: number,
   selected: boolean,
-  orientation: Quaternion,
+  scale: number,
 ): void {
-  const { x, y } = center;
   context.save();
-  context.translate(x, y);
-  context.rotate(-quaternionYaw(orientation));
-  context.strokeStyle = selected ? '#f8fafc' : '#cbd5e1';
-  context.fillStyle = '#0f172a';
+  context.translate(center.x, center.y);
+  context.rotate(-angle);
+  context.scale(scale, scale);
+  context.strokeStyle = selected ? '#ffffff' : '#cbd5e1';
+  context.fillStyle = '#ffffff';
   context.lineWidth = selected ? 2.5 : 1.8;
-  context.beginPath();
-  if (type === 'PIVOT') {
-    context.arc(0, 0, 7, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
+  for (const shape of getJointGlyph(type)) {
     context.beginPath();
-    context.arc(0, 0, 2, 0, Math.PI * 2);
-    context.fillStyle = '#cbd5e1';
-    context.fill();
-  } else if (type === 'GLISSIERE') {
-    context.moveTo(-12, -6);
-    context.lineTo(12, -6);
-    context.moveTo(-12, 6);
-    context.lineTo(12, 6);
-    context.stroke();
-    context.strokeRect(-5, -4, 10, 8);
-  } else if (type === 'PIVOT_GLISSANT') {
-    context.moveTo(-13, -7);
-    context.lineTo(13, -7);
-    context.moveTo(-13, 7);
-    context.lineTo(13, 7);
-    context.stroke();
-    context.beginPath();
-    context.arc(0, 0, 4, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
-  } else if (type === 'ROTULE') {
-    context.arc(0, 0, 8, 0, Math.PI * 2);
-    context.stroke();
-    context.beginPath();
-    context.arc(0, 0, 3, 0, Math.PI * 2);
-    context.fill();
-    context.stroke();
-  } else if (type === 'APPUI_PLAN') {
-    context.moveTo(-12, -2);
-    context.lineTo(12, -2);
-    context.moveTo(-7, 8);
-    context.lineTo(0, 0);
-    context.lineTo(7, 8);
-    context.closePath();
-    context.stroke();
-  } else if (type === 'HELICOIDALE') {
-    context.arc(0, 0, 7, 0, Math.PI * 2);
-    context.moveTo(-9, 9);
-    context.lineTo(9, -9);
-    context.stroke();
-  } else {
-    context.moveTo(-9, -8);
-    context.lineTo(9, -8);
-    context.moveTo(-9, -4);
-    context.lineTo(9, -4);
-    context.moveTo(0, -4);
-    context.lineTo(0, 10);
-    context.stroke();
+    if (shape.kind === 'circle') {
+      context.arc(0, 0, shape.radius, 0, Math.PI * 2);
+      if (shape.filled) context.fill();
+      context.stroke();
+    } else {
+      context.moveTo(shape.points[0].x, -shape.points[0].y);
+      for (const point of shape.points.slice(1)) context.lineTo(point.x, -point.y);
+      if (shape.closed) context.closePath();
+      if (shape.filled) context.fill();
+      context.stroke();
+    }
   }
   context.restore();
+}
+
+function drawSceneLabel(context: CanvasRenderingContext2D, label: SceneLabel, view: View, width: number, height: number): void {
+  const topLeft = worldToScreen({ x: label.bounds.minX, y: label.bounds.maxY }, view, width, height);
+  const bottomRight = worldToScreen({ x: label.bounds.maxX, y: label.bounds.minY }, view, width, height);
+  const anchor = worldToScreen(label.anchor, view, width, height);
+  const labelWidth = bottomRight.x - topLeft.x;
+  const labelHeight = bottomRight.y - topLeft.y;
+  const labelCenter = { x: topLeft.x + labelWidth / 2, y: topLeft.y + labelHeight / 2 };
+  if (label.kind === 'warning' && Math.hypot(anchor.x - labelCenter.x, anchor.y - labelCenter.y) > 50 * view.scale) {
+    context.beginPath();
+    context.strokeStyle = label.kind === 'warning' ? '#fb7185' : '#64748b';
+    context.setLineDash([3, 3]);
+    context.moveTo(anchor.x, anchor.y);
+    context.lineTo(labelCenter.x, labelCenter.y);
+    context.stroke();
+    context.setLineDash([]);
+  }
+  context.fillStyle = label.kind === 'warning' ? '#fff1f2' : '#0f172a';
+  context.strokeStyle = label.kind === 'warning' ? '#be123c' : '#475569';
+  context.lineWidth = 0.8;
+  context.beginPath();
+  context.roundRect(topLeft.x, topLeft.y, labelWidth, labelHeight, 3);
+  context.fill();
+  context.stroke();
+  context.fillStyle = label.kind === 'warning' ? '#9f1239' : '#f8fafc';
+  context.font = `${11 * view.scale}px ui-sans-serif, system-ui`;
+  context.textBaseline = 'top';
+  context.fillText(label.text, topLeft.x + 4 * view.scale, topLeft.y + 2 * view.scale);
 }
 
 export const Viewport2D: React.FC = () => {
@@ -139,6 +110,7 @@ export const Viewport2D: React.FC = () => {
   const [view, setView] = useState<View>(INITIAL_VIEW);
   const {
     document,
+    documentRevision,
     selectedEntityId,
     selectedEntityType,
     selectEntity,
@@ -157,6 +129,7 @@ export const Viewport2D: React.FC = () => {
     if (!canvas || !context) return;
     const parent = canvas.parentElement;
     if (!parent) return;
+    const scene = buildPlanarScene(document);
 
     const render = () => {
       const bounds = canvas.getBoundingClientRect();
@@ -214,16 +187,14 @@ export const Viewport2D: React.FC = () => {
       context.fillText('X', origin.x + 44, origin.y + 4);
       context.fillText('Y', origin.x - 4, origin.y - 46);
 
-      for (const entity of document.geometry.entities) {
-        const body = document.classesEquivalence.find((item) => item.id === entity.classId);
+      for (const { entity, bodyId, points: worldPoints } of scene.geometry) {
+        const body = document.classesEquivalence.find((item) => item.id === bodyId);
         if (!body) continue;
-        const bodyPosition = body.position ?? { x: 0, y: 0, z: 0 };
-        const points = entityWorldPoints(entity, bodyPosition, body.rotation ?? 0)
-          .map((point) => worldToScreen(point, view, width, height));
+        const points = worldPoints.map((point) => worldToScreen(point, view, width, height));
         if (!points.length) continue;
         const active = selectedEntityType === 'Class' && selectedEntityId === body.id;
         context.save();
-        context.strokeStyle = active ? '#f8fafc' : entity.style.color || body.color;
+        context.strokeStyle = active ? '#ffffff' : entity.style.color || body.color;
         context.fillStyle = entity.style.color || body.color;
         context.lineWidth = Math.max(1.5, entity.style.width + (active ? 2 : 0));
         context.setLineDash(entity.style.stroke === 'dashed' ? [7, 5] : []);
@@ -241,25 +212,85 @@ export const Viewport2D: React.FC = () => {
         }
         context.stroke();
         context.setLineDash([]);
-        const labelCenter = points.reduce(
-          (center, point) => ({ x: center.x + point.x / points.length, y: center.y + point.y / points.length }),
-          { x: 0, y: 0 },
-        );
-        const labelPoint = {
-          x: labelCenter.x,
-          y: (entity.kind === 'rectangle' ? Math.min(...points.map(({ y }) => y)) : labelCenter.y) - 12,
-        };
-        context.font = '11px ui-sans-serif, system-ui';
-        context.fillStyle = active ? '#f8fafc' : '#cbd5e1';
-        context.fillText(body.name, labelPoint.x + 6, labelPoint.y - 7);
         context.restore();
       }
 
-      for (const joint of document.liaisons) {
-        const position = worldToScreen(joint.position, view, width, height);
-        drawJointSymbol(context, joint.type, position, selectedEntityType === 'Joint' && selectedEntityId === joint.id, joint.orientation);
+      for (const marker of scene.groundMarkers) {
+        const center = worldToScreen(marker.center, view, width, height);
+        context.save();
+        context.translate(center.x, center.y);
+        context.rotate(-marker.angle);
+        context.strokeStyle = '#cbd5e1';
+        context.lineWidth = 1.6;
+        context.beginPath();
+        context.moveTo(-14, 0);
+        context.lineTo(14, 0);
+        for (let x = -10; x <= 10; x += 5) {
+          context.moveTo(x, 4);
+          context.lineTo(x - 4, 11);
+        }
+        context.stroke();
+        context.restore();
       }
 
+      for (const joint of scene.joints) {
+        const center = worldToScreen(joint.center, view, width, height);
+        const anchorA = worldToScreen(joint.anchorA, view, width, height);
+        const anchorB = worldToScreen(joint.anchorB, view, width, height);
+        const inconsistent = joint.mismatch > 1e-6;
+        context.save();
+        context.strokeStyle = inconsistent ? '#fb7185' : '#94a3b8';
+        context.lineWidth = 1;
+        context.setLineDash([4, 4]);
+        for (const anchor of [anchorA, anchorB]) {
+          if (Math.hypot(anchor.x - center.x, anchor.y - center.y) > 0.5) {
+            context.beginPath();
+            context.moveTo(anchor.x, anchor.y);
+            context.lineTo(center.x, center.y);
+            context.stroke();
+          }
+        }
+        if (inconsistent) {
+          context.strokeStyle = '#fb7185';
+          context.lineWidth = 2;
+          context.beginPath();
+          context.moveTo(anchorA.x, anchorA.y);
+          context.lineTo(anchorB.x, anchorB.y);
+          context.stroke();
+        }
+        context.setLineDash([]);
+        if (joint.type === 'PIVOT') {
+          context.beginPath();
+          context.arc(anchorA.x, anchorA.y, 3.5, 0, Math.PI * 2);
+          context.fillStyle = '#f8fafc';
+          context.fill();
+          context.strokeStyle = '#0f172a';
+          context.stroke();
+          context.beginPath();
+          context.arc(anchorB.x, anchorB.y, 2, 0, Math.PI * 2);
+          context.fillStyle = '#0f172a';
+          context.fill();
+          context.strokeStyle = '#f8fafc';
+          context.stroke();
+        }
+        context.restore();
+      }
+
+      const jointSymbols = [...scene.joints].sort((first, second) =>
+        Number(first.type === 'PIVOT') - Number(second.type === 'PIVOT'));
+      for (const joint of jointSymbols) {
+        const center = worldToScreen(joint.center, view, width, height);
+        drawJointGlyph(context, joint.type, center, joint.angle, selectedEntityType === 'Joint' && selectedEntityId === joint.id, view.scale);
+      }
+
+      for (const label of scene.labels) drawSceneLabel(context, label, view, width, height);
+      if (scene.empty) {
+        context.fillStyle = '#94a3b8';
+        context.font = '14px ui-sans-serif, system-ui';
+        context.textAlign = 'center';
+        context.fillText('Document vide — ajoutez un solide pour commencer', width / 2, height / 2);
+        context.textAlign = 'start';
+      }
       context.fillStyle = '#64748b';
       context.font = '10px ui-sans-serif, system-ui';
       context.fillText(`Échelle ${document.meta.lengthUnit} · ${view.scale.toFixed(2)} px/${document.meta.lengthUnit}`, 12, height - 12);
@@ -275,20 +306,12 @@ export const Viewport2D: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const bounds = canvas.getBoundingClientRect();
-    const points: Point[] = [];
-    for (const entity of document.geometry.entities) {
-      const body = document.classesEquivalence.find((item) => item.id === entity.classId);
-      if (body) points.push(...entityWorldPoints(entity, body.position ?? { x: 0, y: 0, z: 0 }, body.rotation ?? 0));
-    }
-    points.push(...document.liaisons.map((joint) => joint.position));
-    if (!points.length) {
+    const scene = buildPlanarScene(document);
+    if (scene.empty) {
       setView(INITIAL_VIEW);
       return;
     }
-    const minX = Math.min(...points.map(({ x }) => x));
-    const maxX = Math.max(...points.map(({ x }) => x));
-    const minY = Math.min(...points.map(({ y }) => y));
-    const maxY = Math.max(...points.map(({ y }) => y));
+    const { minX, maxX, minY, maxY } = scene.bounds;
     const spanX = Math.max(maxX - minX, 40);
     const spanY = Math.max(maxY - minY, 40);
     const scale = Math.max(0.25, Math.min(8, Math.min((bounds.width * 0.75) / spanX, (bounds.height * 0.7) / spanY)));
@@ -301,6 +324,14 @@ export const Viewport2D: React.FC = () => {
     const frame = window.requestAnimationFrame(fitToScene);
     return () => window.cancelAnimationFrame(frame);
   }, [fitToScene]);
+
+  const lastRevision = useRef(documentRevision);
+  useEffect(() => {
+    if (lastRevision.current === documentRevision) return;
+    lastRevision.current = documentRevision;
+    const frame = window.requestAnimationFrame(fitToScene);
+    return () => window.cancelAnimationFrame(frame);
+  }, [documentRevision, fitToScene]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -340,19 +371,17 @@ export const Viewport2D: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const bounds = canvas.getBoundingClientRect();
-    for (const entity of [...document.geometry.entities].reverse()) {
-      const body = document.classesEquivalence.find((item) => item.id === entity.classId);
-      if (!body) continue;
-      const points = entityWorldPoints(entity, body.position ?? { x: 0, y: 0, z: 0 }, body.rotation ?? 0)
+    for (const { entity, bodyId, points: worldPoints } of [...buildPlanarScene(document).geometry].reverse()) {
+      const points = worldPoints
         .map((point) => worldToScreen(point, view, bounds.width, bounds.height));
       if (entity.kind === 'rectangle' && points.length >= 4) {
         if (isPointInPolygon(screenPoint, points) ||
             points.some((point, index) => distanceToSegment(screenPoint, point, points[(index + 1) % points.length]) <= 8)) {
-          return body.id;
+          return bodyId;
         }
       } else {
         for (let index = 1; index < points.length; index += 1) {
-          if (distanceToSegment(screenPoint, points[index - 1], points[index]) <= 9) return body.id;
+          if (distanceToSegment(screenPoint, points[index - 1], points[index]) <= 9) return bodyId;
         }
       }
     }

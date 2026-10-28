@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { detectConversionLosses, fromInternalModel, toInternalModel, validateReferences } from '../conversion';
-import { createDefaultDocument } from '../defaultDocument';
+import { createDefaultDocument, createEmptyKineoDocument } from '../defaultDocument';
 import type { KineoV3 } from '../jsonV3';
 import { validateKineoV3 } from '../validation';
 import { selectDocumentDirty, useKineoStore } from '../../store/useKineoStore';
@@ -44,6 +44,43 @@ describe('Kineo JSON v3.0 foundation', () => {
   it('validates the original specification example', () => {
     expect(validateKineoV3(canonicalExample).meta.schemaVersion).toBe('3.0');
     expect(() => validateReferences(canonicalExample)).not.toThrow();
+  });
+
+  it('creates a valid empty JSON v3 document without demonstration mechanism data', () => {
+    const empty = createEmptyKineoDocument();
+    expect(validateKineoV3(empty)).toEqual(empty);
+    expect(empty.meta.schemaVersion).toBe('3.0');
+    expect(empty.classesEquivalence).toEqual([]);
+    expect(empty.liaisons).toEqual([]);
+    expect(empty.geometry.entities).toEqual([]);
+    expect(empty.kinematics.drivenDofs).toEqual([]);
+    expect(Object.keys(empty.jointDefinitions).length).toBeGreaterThan(0);
+    expect(() => validateReferences(empty)).not.toThrow();
+    expect(fromInternalModel(toInternalModel(empty))).toEqual(empty);
+    const example = createDefaultDocument();
+    expect(example.classesEquivalence.length).toBeGreaterThan(0);
+    expect(() => validateReferences(validateKineoV3(example))).not.toThrow();
+    expect(fromInternalModel(toInternalModel(example))).toEqual(example);
+  });
+
+  it('replaces document history and selection when creating a new empty document', () => {
+    const store = useKineoStore.getState();
+    const bodyId = store.addClass('Temporary', { x: 10, y: 0, z: 0 });
+    useKineoStore.getState().selectEntity(bodyId, 'Class');
+    const revisionBeforeReplacement = useKineoStore.getState().documentRevision;
+    useKineoStore.getState().replaceDocument(createEmptyKineoDocument());
+    const replaced = useKineoStore.getState();
+    expect(replaced.documentRevision).toBe(revisionBeforeReplacement + 1);
+    expect(replaced.document.classesEquivalence).toEqual([]);
+    expect(replaced.document.liaisons).toEqual([]);
+    expect(replaced.document.geometry.entities).toEqual([]);
+    expect(replaced.selectedEntityId).toBeNull();
+    expect(replaced.undoStack).toEqual([]);
+    expect(replaced.redoStack).toEqual([]);
+    expect(selectDocumentDirty(replaced)).toBe(false);
+    replaced.undo();
+    replaced.redo();
+    expect(useKineoStore.getState().document).toEqual(createEmptyKineoDocument());
   });
 
   it('adds a supported joint definition when the imported catalogue does not contain it', () => {
@@ -173,10 +210,18 @@ describe('Kineo JSON v3.0 foundation', () => {
 
   it('moves attached joints with a body and stores newly placed anchors in local frames', () => {
     const store = useKineoStore.getState();
+    const bodyBeforeMove = store.document.classesEquivalence.find(({ id }) => id === 'eq_2')!;
+    const endJointBeforeMove = store.document.liaisons.find(({ id }) => id === 'link_3')!;
     store.updateClass('eq_2', { position: { x: 80, y: 10, z: 0 } });
     let document = useKineoStore.getState().document;
-    expect(document.liaisons.find((joint) => joint.id === 'link_2')?.position).toMatchObject({ x: 80, y: 10 });
-    expect(document.liaisons.find((joint) => joint.id === 'link_3')?.position).toMatchObject({ x: 200, y: 10 });
+    expect(document.liaisons.find((joint) => joint.id === 'link_2')?.position.x).toBeCloseTo(80);
+    expect(document.liaisons.find((joint) => joint.id === 'link_2')?.position.y).toBeCloseTo(10);
+    expect(document.liaisons.find((joint) => joint.id === 'link_3')?.position.x).toBeCloseTo(
+      endJointBeforeMove.position.x + 80 - bodyBeforeMove.position!.x,
+    );
+    expect(document.liaisons.find((joint) => joint.id === 'link_3')?.position.y).toBeCloseTo(
+      endJointBeforeMove.position.y + 10 - bodyBeforeMove.position!.y,
+    );
 
     const bodyId = useKineoStore.getState().addClass('Rotated body', { x: 300, y: 40, z: 0 });
     useKineoStore.getState().updateClass(bodyId, { rotation: Math.PI / 2 });

@@ -44,7 +44,7 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-300">
       <div className="border-b border-slate-800 p-3">
-        <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Liaisons ISO / AFNOR</h2>
+        <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">Symboles de liaison</h2>
         <div className="grid grid-cols-2 gap-1.5">
           {JOINTS.map((joint) => (
             <button
