@@ -1,6 +1,6 @@
 # Kineo — Code Wiki
 
-Developer guide for the current Kineo v0.1 codebase. The initial project audit is kept
+Developer guide for the current Kineo v0.2 codebase. The initial project audit is kept
 in [`audit/18_PROJECT_STATUS_AND_ROADMAP.md`](./audit/18_PROJECT_STATUS_AND_ROADMAP.md)
 as historical context; the current implementation and test status are recorded in
 [`docs/`](./docs/).
@@ -12,14 +12,15 @@ contract is the JSON v3.0 example in [`documentation_etape1_etape2.txt`](./docum
 The app opens with a slider-crank example and supports editing rigid bodies, joints,
 local attachment points and planar geometry.
 
-The current release is an editor, not a kinematic solver: it does not calculate
-mobility or hyperstatism, animate motion, or provide 3D/graph rendering.
+The current application includes a mechanical connectivity graph, but is not a
+kinematic solver: it does not calculate mobility or hyperstatism, animate motion, or
+provide 3D modeling.
 
 ## Stack and commands
 
 - React 19, TypeScript 6, Vite 8
 - Zustand 5 for document and interface state
-- Zod 3 for runtime JSON validation
+- Zod 4.6 for runtime JSON validation
 - Vitest 5 and ESLint 10
 
 ```sh
@@ -40,17 +41,22 @@ src/
 ├── App.tsx                         Main shell and document keyboard shortcuts
 ├── components/
 │   ├── canvas/Viewport2D.tsx       HiDPI canvas, drawing, hit-testing, pan/zoom/drag
+│   ├── graph/MechanicalGraphView.tsx Interactive mechanical multigraph
 │   └── layout/
-│       ├── Header.tsx              JSON open/save, document title, undo/redo, view modes
+│       ├── Header.tsx              JSON/SVG/PNG export, guarded open/new, dirty state
 │       ├── Sidebar.tsx             Joint library and rigid-body/joint entity list
 │       ├── PropertyInspector.tsx   Class and liaison editors
-│       └── StatusBar.tsx           Counts, grid/snap state, v0.1 solver notice
+│       └── StatusBar.tsx           Counts, grid/snap state, solver-scope notice
 ├── model/
 │   ├── jsonV3.ts                   Canonical JSON v3.0 types
 │   ├── validation.ts               Zod shape and numeric validation
 │   ├── conversion.ts               Clone-based boundaries and reference integrity
+│   ├── mechanicalGraph.ts          Derived topology, components, parallel edges, cycles
+│   ├── graphLayout.ts              Deterministic transient component layout
+│   ├── planarCoordinates.ts        Shared planar transforms and quaternion yaw
+│   ├── export2d.ts                 Standalone SVG and browser PNG rendering
 │   ├── defaultDocument.ts          Joint catalogue and slider-crank example
-│   └── __tests__/kineo.test.ts     Schema, conversion, store and integrity tests
+│   └── __tests__/                   Schema, graph, export, store and integrity tests
 ├── store/useKineoStore.ts          Document CRUD, selection, history and UI settings
 └── types/kineo.ts                  Application aliases for the canonical document
 ```
@@ -101,24 +107,36 @@ canvas geometry or a joint selects the corresponding document entity.
 ## UI and persistence
 
 - **Ouvrir** reads a selected JSON file, parses it, validates v3.0 shape and references,
-  then replaces the active document.
-- **Enregistrer JSON** downloads a formatted JSON v3.0 document.
+  then replaces the active document. If unsaved changes exist, replacement requires
+  explicit confirmation.
+- **Nouveau** also confirms before discarding unsaved changes. Dirty state compares the
+  canonical document with the last open/new/save baseline and respects undo/redo.
+- **Enregistrer JSON** downloads a formatted JSON v3.0 document and marks the active
+  document saved.
+- **Exporter SVG/PNG** exports a standalone 2D rendering, separate from editable JSON.
 - **Ctrl/Cmd+Z**, **Ctrl/Cmd+Y**, and **Ctrl/Cmd+Shift+Z** provide undo/redo.
 - The joint library includes pivot, slider, cylindrical, spherical, planar, helical
   and fixed symbols.
-- The 3D, graph and split view selectors remain visible, but are placeholders.
+- Graph View derives nodes from rigid bodies and edges only from liaison instances.
+  Split View displays the 2D editor and graph side-by-side; both share the same store
+  selection and canonical document.
+- Graph analysis reports connected components, isolated bodies, parallel connections,
+  fixed bodies, and graph cycles. The graph layout is transient UI presentation data.
 - The solve/simulation control is disabled; the status bar explicitly says no solver is
-  available in v0.1.
+  available in the current v0.2 scope.
 
 ## Known limitations
 
 - No kinematic solve, computed mobility/hyperstatism, motion playback or DOF driver UI.
-- No 3D/graph scene, geometry drawing tools, SVG/PNG export or autosave.
+- No 3D modeling, geometry drawing tools or autosave.
+- A graph cycle indicates connectivity topology only; it is not proof of geometrical
+  assembly or solvability.
 - The standard joint symbols are schematic 2D representations; formal ISO/AFNOR
   conformance has not been independently certified.
 - The editor positions bodies in a planar view; imported 3D coordinates are retained
   by JSON but only XY and planar rotation are rendered.
 
 See [`docs/V0.0_FOUNDATION.md`](./docs/V0.0_FOUNDATION.md),
-[`docs/V0.1_2D_EDITOR.md`](./docs/V0.1_2D_EDITOR.md), and
+[`docs/V0.1_2D_EDITOR.md`](./docs/V0.1_2D_EDITOR.md),
+[`docs/V0.2_GRAPH_PERSISTENCE.md`](./docs/V0.2_GRAPH_PERSISTENCE.md), and
 [`docs/TEST_RESULTS.md`](./docs/TEST_RESULTS.md) for verified details.

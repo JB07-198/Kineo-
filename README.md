@@ -47,9 +47,17 @@ automatically inside GitHub Actions.
 - **Ouvrir** validates JSON v3.0, including referential integrity; **Enregistrer JSON**
   downloads the current document.
 
-The 2D editor does not run a kinematic solver. 3D, graph rendering, motion simulation,
-mobility calculation, and image/vector export are not part of v0.1.
+The connectivity graph describes topology only; it does not solve constraints or
+calculate mobility. Split View synchronizes the 2D editor and graph. The graph,
+SVG/PNG export, and document unsaved-change protection are documented in
+[`docs/V0.2_GRAPH_PERSISTENCE.md`](./docs/V0.2_GRAPH_PERSISTENCE.md).
+
+Use **Graph** to inspect body/joint connectivity or **Split** for synchronized 2D and
+graph views. **Exporter SVG** and **Exporter PNG** create visual outputs; JSON remains
+the editable document. Creating a new document or opening another prompts before
+discarding unsaved changes.
 
 See [`docs/V0.0_FOUNDATION.md`](./docs/V0.0_FOUNDATION.md),
-[`docs/V0.1_2D_EDITOR.md`](./docs/V0.1_2D_EDITOR.md), and
+[`docs/V0.1_2D_EDITOR.md`](./docs/V0.1_2D_EDITOR.md),
+[`docs/V0.2_GRAPH_PERSISTENCE.md`](./docs/V0.2_GRAPH_PERSISTENCE.md), and
 [`docs/TEST_RESULTS.md`](./docs/TEST_RESULTS.md) for implementation and verification details.

@@ -1,11 +1,11 @@
-# Kineo v0.1 — Test Results
+# Kineo v0.2 — Test Results
 
-## Environment
+## Environment and scope
 
-- Node.js `v22.22.2`
-- npm `10.9.7`
-- Vite `8.3.5`
-- Integrated Playwright browser against the local Vite development server
+- Node.js `v22.22.2`; npm `10.9.7`.
+- Vite development server on `http://127.0.0.1:5173/` for the browser checks.
+- Validation covers the in-progress v0.2 Graph & Persistence implementation on
+  `feature/v0.2`. The package version remains `0.1.0`; this work is not a release.
 
 ## Automated checks
 
@@ -13,64 +13,72 @@
 |---|---|---|
 | `npm run typecheck` | PASS | `tsc -b` completed without errors. |
 | `npm run lint` | PASS | ESLint completed without warnings or errors. |
-| `npm test` | PASS | 1 test file, 14 tests passed. |
-| `npm run build` | PASS | TypeScript build and Vite production build completed; 123 modules transformed. |
-| `npm audit` | PASS | 0 vulnerabilities after upgrading Zod to `4.6.7`. |
+| `npm test` | PASS | 4 test files, 40 tests passed. |
+| `npm run build` | PASS | TypeScript project build passed; Vite transformed 128 modules and emitted the production bundle. |
+| `npm audit` | PASS | 0 vulnerabilities. |
 | `npm audit --omit=dev` | PASS | 0 production vulnerabilities. |
-| `git diff --check` | PASS | No whitespace errors in the audited changes. |
+| `git diff --check` | PASS | No whitespace errors in the reviewed changes. |
 
-The regression tests load the original JSON v3.0 fixture directly from the repository's
-specification file using a relative module URL. They test structural round-trip
-preservation for non-default metadata and units, definitions, multiple rigid bodies
-and liaisons, local anchors, quaternion orientation, driven DOFs, geometry and nested
-extension fields. Store coverage includes reference failures, invalid import safety,
-body/joint CRUD, local-anchor edits, dependent-reference cascades, ground protection,
-and multi-step undo/redo.
+The test suite includes JSON v3.0 validation and round trips, document and
+reference-integrity operations, undo/redo, multigraph topology and cycle rank,
+deterministic graph layout, SVG generation, and PNG-input validation/size limits.
+The JSON round-trip test reads the original specification example from the
+repository and checks nested extension properties as well as metadata, units,
+definitions, bodies, liaisons, anchors, orientations, driven DOFs, and geometry.
 
-## Browser and JSON save/reopen
+## Browser and editor checks
 
-Verified against the running application:
+Browser verification used the running Vite development server:
 
-- Created and renamed a body, added a pivot, edited its local attachment point, and
-  observed the edited inspector value. Undo and redo restored the anchor values.
-- Dragged the body with snapping enabled: its coordinates changed from `(250, 0)` to
-  `(260, 10)`.
-- Zoom changed from `170%` to `190%`; Shift-drag panning left the model coordinates
-  unchanged. No console errors were observed after correcting the wheel listener.
-- At viewport sizes `1024x768` and `1280x800`, the canvas measured `479x676` and
-  `735x708` pixels respectively. This verifies canvas resizing, not a mobile layout
-  or automatic scene refit.
-- Deleting the created body removed its dependent joint. Undo restored both; redo
-  removed both again. Exported references after redo were checked against existing
-  bodies and DOFs.
-- A malformed JSON import displayed an explicit error and left the five-body,
-  five-joint document unchanged.
+- Graph View rendered the slider-crank as 4 body nodes and 4 liaison edges, with
+  one connected component, no isolated nodes, no parallel connections, and one
+  independent graph cycle.
+- A selected body remained selected when switching to Split View. Selecting the
+  Piston from the 2D entity list highlighted the corresponding graph node and
+  synchronized the inspector.
+- Deleting the graph-selected Piston removed its graph node; undo restored it.
+- New-document cancellation preserved a dirty title and displayed the cancellation
+  status. Accepting the replacement created a clean default document. Opening a
+  valid file after editing was also exercised with confirmation enabled.
+- Changing view modes did not alter the exported JSON structure.
+- The **Exporter SVG** action produced a captured SVG Blob with 4 body groups,
+  4 geometry entities, 4 liaison symbols, and one ground marker.
+- The **Exporter PNG** action produced an `image/png` Blob (25,061 bytes) with a
+  valid PNG signature and dimensions of `797 x 240` pixels.
+- The **Enregistrer JSON** action produced a JSON Blob. The captured content was
+  parsed, supplied back to the application's file-input handler as a JSON `File`,
+  reopened, and saved again. Structural comparison of the parsed documents was
+  equal; both contained JSON schema version `3.0`, 4 bodies, 4 liaisons, and
+  4 geometry entities. The imported title and clean saved state were verified.
+- No browser console errors were observed during the cross-view selection and
+  delete/undo check.
 
-The real **Enregistrer JSON** action was triggered in the browser. The browser
-download event did not arrive within 10 seconds, so no OS/browser download path was
-available to inspect. As an integration fallback, the test captured the filename and
-Blob URL from the action's actual download anchor, fetched and parsed the generated
-Blob (`Bielle-manivelle-piston.json`, 11,374 characters), imported that content through
-the application's file-input handler, and triggered a second save. A recursive
-structural comparison of the two JSON objects was equal. The import handler's success
-status confirms the captured JSON passed runtime schema and reference validation.
-The user additionally reports manually verifying in Google Chrome that a real
-downloaded JSON file can be reopened and that the mechanism is preserved. That
-manual verification is user-reported rather than independently captured in this
-browser session.
+The integrated browser harness captured the Blob produced by the real save/export
+toolbar actions, rather than capturing the browser's OS-level download destination.
+The saved JSON Blob itself was parsed and re-imported through the real application
+file-input handler. A separate OS-managed download file was not independently
+inspected in this v0.2 browser run. The user's earlier report of a manual Chrome
+download/reopen check pertains to the v0.1 validation.
 
-## Scope and limitations
+## Security audit
 
-- No kinematic solver or motion simulation is present in v0.1. A drawn joint is not
-  proof of a mechanically satisfied constraint; dragging one body does not solve or
-  reposition the other connected body.
-- The default mechanism has a fixed ground body, but the UI does not designate a
-  different ground body.
-- 3D, graph/split rendering, formal ISO/AFNOR symbol certification, mobility and
-  hyperstatism calculations, image export, autosave, and mobile-specific layout are
-  not verified v0.1 features.
-- Browser-managed download-file capture remains limited by the integrated browser
-  harness as described above.
+Both `npm audit` and `npm audit --omit=dev` reported zero vulnerabilities. There
+were no dependency-manifest changes in this v0.2 work.
 
-See [`FINAL_VALIDATION_V0.1.md`](./FINAL_VALIDATION_V0.1.md) for the full audit,
-security findings, release checklist, and verdict.
+## Limitations
+
+- The graph is derived from rigid bodies and actual liaison instances. Its cycle
+  rank is a graph-topology measure only; it does not establish geometric assembly,
+  constraint validity, mobility, or solver convergence.
+- No kinematic solver, motion simulation, mobility/hyperstaticity calculation, or
+  3D editor is implemented.
+- SVG and PNG are visual exports, not editable mechanism documents. JSON v3.0
+  remains the persistence format.
+- Browser verification used the Vite development server, not a deployed GitHub Pages
+  site or production preview. Mobile-specific layout and formal ISO/AFNOR
+  certification of symbols were not tested.
+- The package version remains `0.1.0` to keep the tagged baseline metadata
+  unchanged. No commit, tag, push, or publication was performed.
+
+See [`V0.2_GRAPH_PERSISTENCE.md`](./V0.2_GRAPH_PERSISTENCE.md) for the architecture,
+behavior, and remaining work.

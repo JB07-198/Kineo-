@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useKineoStore } from '../../store/useKineoStore';
-import type { GeometryEntity, Vector3 } from '../../model/jsonV3';
+import { localToWorld2D, quaternionYaw } from '../../model/planarCoordinates';
+import type { GeometryEntity, Quaternion, Vector3 } from '../../model/jsonV3';
 
 type Point = { x: number; y: number };
 type View = { scale: number; center: Point };
@@ -10,13 +11,6 @@ type DragState =
   | { kind: 'joint'; id: string; startWorld: Point; position: Vector3; edited: boolean };
 
 const INITIAL_VIEW: View = { scale: 0.9, center: { x: 105, y: 0 } };
-
-function worldPoint(bodyPosition: Vector3, rotation: number, local: Vector3): Point {
-  return {
-    x: bodyPosition.x + local.x * Math.cos(rotation) - local.y * Math.sin(rotation),
-    y: bodyPosition.y + local.x * Math.sin(rotation) + local.y * Math.cos(rotation),
-  };
-}
 
 function worldToScreen(point: Point, view: View, width: number, height: number): Point {
   return {
@@ -61,9 +55,9 @@ function entityWorldPoints(entity: GeometryEntity, position: Vector3, rotation: 
       { x: right, y: bottom },
       { x: right, y: top },
       { x: left, y: top },
-    ].map((point) => worldPoint(position, rotation, { ...point, z: 0 }));
+    ].map((point) => localToWorld2D({ ...point, z: 0 }, position, rotation));
   }
-  return localPoints.map((point) => worldPoint(position, rotation, point));
+  return localPoints.map((point) => localToWorld2D(point, position, rotation));
 }
 
 function drawJointSymbol(
@@ -71,10 +65,12 @@ function drawJointSymbol(
   type: string,
   center: Point,
   selected: boolean,
+  orientation: Quaternion,
 ): void {
   const { x, y } = center;
   context.save();
   context.translate(x, y);
+  context.rotate(-quaternionYaw(orientation));
   context.strokeStyle = selected ? '#f8fafc' : '#cbd5e1';
   context.fillStyle = '#0f172a';
   context.lineWidth = selected ? 2.5 : 1.8;
@@ -261,7 +257,7 @@ export const Viewport2D: React.FC = () => {
 
       for (const joint of document.liaisons) {
         const position = worldToScreen(joint.position, view, width, height);
-        drawJointSymbol(context, joint.type, position, selectedEntityType === 'Joint' && selectedEntityId === joint.id);
+        drawJointSymbol(context, joint.type, position, selectedEntityType === 'Joint' && selectedEntityId === joint.id, joint.orientation);
       }
 
       context.fillStyle = '#64748b';

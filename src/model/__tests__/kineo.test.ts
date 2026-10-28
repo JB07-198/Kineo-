@@ -4,7 +4,7 @@ import { detectConversionLosses, fromInternalModel, toInternalModel, validateRef
 import { createDefaultDocument } from '../defaultDocument';
 import type { KineoV3 } from '../jsonV3';
 import { validateKineoV3 } from '../validation';
-import { useKineoStore } from '../../store/useKineoStore';
+import { selectDocumentDirty, useKineoStore } from '../../store/useKineoStore';
 
 function readCanonicalExample(): KineoV3 {
   const specification = readFileSync(
@@ -263,6 +263,33 @@ describe('Kineo JSON v3.0 foundation', () => {
     expect(useKineoStore.getState().selectedEntityId).toBeNull();
     useKineoStore.getState().redo();
     expect(useKineoStore.getState().document.classesEquivalence.some((body) => body.id === bodyId)).toBe(true);
+    expect(() => validateReferences(useKineoStore.getState().document)).not.toThrow();
+  });
+
+  it('tracks dirty state through edits, undo/redo, save, replacement, and view switching', () => {
+    const store = useKineoStore.getState();
+    expect(selectDocumentDirty(store)).toBe(false);
+
+    store.setTitle('Edited mechanism');
+    expect(selectDocumentDirty(useKineoStore.getState())).toBe(true);
+    useKineoStore.getState().undo();
+    expect(selectDocumentDirty(useKineoStore.getState())).toBe(false);
+    useKineoStore.getState().redo();
+    expect(selectDocumentDirty(useKineoStore.getState())).toBe(true);
+    useKineoStore.getState().markDocumentSaved();
+    expect(selectDocumentDirty(useKineoStore.getState())).toBe(false);
+
+    const savedSnapshot = JSON.stringify(useKineoStore.getState().document);
+    useKineoStore.getState().setViewMode('Graph');
+    useKineoStore.getState().setViewMode('Split');
+    expect(JSON.stringify(useKineoStore.getState().document)).toBe(savedSnapshot);
+    expect(selectDocumentDirty(useKineoStore.getState())).toBe(false);
+
+    const imported = structuredClone(canonicalExample);
+    imported.meta.title = 'Imported mechanism';
+    useKineoStore.getState().replaceDocument(imported);
+    expect(selectDocumentDirty(useKineoStore.getState())).toBe(false);
+    expect(useKineoStore.getState().undoStack).toEqual([]);
     expect(() => validateReferences(useKineoStore.getState().document)).not.toThrow();
   });
 

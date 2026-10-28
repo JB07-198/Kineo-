@@ -14,6 +14,7 @@ interface KineoState {
   activeAppMode: 'Edit' | 'Simulation';
   selectedEntityId: string | null;
   selectedEntityType: SelectionType | null;
+  savedDocumentJson: string;
   gridVisible: boolean;
   snapEnabled: boolean;
   undoStack: KineoDocument[];
@@ -33,12 +34,14 @@ interface KineoState {
   updateJoint: (id: string, updates: Partial<Pick<Liaison, 'name' | 'classA' | 'classB' | 'position' | 'dof'>>) => void;
   removeEntity: (id: string, type: SelectionType) => void;
   replaceDocument: (document: unknown) => void;
+  markDocumentSaved: () => void;
   setTitle: (title: string) => void;
   undo: () => void;
   redo: () => void;
 }
 
 const initialDocument = createDefaultDocument();
+const initialSavedDocumentJson = JSON.stringify(initialDocument);
 
 function commitDocument(state: KineoState, document: KineoDocument): Partial<KineoState> {
   return {
@@ -144,6 +147,7 @@ export const useKineoStore = create<KineoState>((set) => ({
   activeAppMode: 'Edit',
   selectedEntityId: null,
   selectedEntityType: null,
+  savedDocumentJson: initialSavedDocumentJson,
   gridVisible: true,
   snapEnabled: true,
   undoStack: [],
@@ -418,15 +422,19 @@ export const useKineoStore = create<KineoState>((set) => ({
   replaceDocument: (input) => {
     const document = validateKineoV3(input);
     validateReferences(document);
+    const snapshot = structuredClone(document);
     set((state) => ({
       ...state,
-      document: structuredClone(document),
+      document: snapshot,
+      savedDocumentJson: JSON.stringify(snapshot),
       undoStack: [],
       redoStack: [],
       selectedEntityId: null,
       selectedEntityType: null,
     }));
   },
+
+  markDocumentSaved: () => set((state) => ({ savedDocumentJson: JSON.stringify(state.document) })),
 
   setTitle: (title) => set((state) => {
     const document = { ...state.document, meta: { ...state.document.meta, title } };
@@ -461,3 +469,5 @@ export const useKineoStore = create<KineoState>((set) => ({
 
 export const selectUndoAvailable = (state: KineoState): boolean => state.undoStack.length > 0;
 export const selectRedoAvailable = (state: KineoState): boolean => state.redoStack.length > 0;
+export const selectDocumentDirty = (state: KineoState): boolean =>
+  JSON.stringify(state.document) !== state.savedDocumentJson;
