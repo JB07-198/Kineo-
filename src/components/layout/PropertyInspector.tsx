@@ -49,7 +49,7 @@ const positionFields = (
 );
 
 export const PropertyInspector: React.FC = () => {
-  const { document, selectedEntityId, selectedEntityType, updateClass, updateJoint, removeEntity } = useKineoStore();
+  const { document, selectedEntityId, selectedEntityType, updateClass, updateJoint, updateJointAnchor, removeEntity } = useKineoStore();
   const selectedClass = selectedEntityType === 'Class'
     ? document.classesEquivalence.find((body) => body.id === selectedEntityId)
     : undefined;
@@ -154,6 +154,25 @@ export const PropertyInspector: React.FC = () => {
           <div>
             <p className="mb-2 text-[11px] font-medium text-slate-400">Position de la liaison</p>
             {positionFields(selectedJoint.position, updatePosition, document.meta.lengthUnit)}
+          </div>
+          <div className="space-y-3 border-t border-slate-800 pt-3">
+            <h3 className="text-[11px] font-semibold text-slate-300">Points d'attache locaux</h3>
+            {([
+              ['onClassA', 'Solide A'],
+              ['onClassB', 'Solide B'],
+            ] as const).map(([frame, label]) => (
+              <div key={frame}>
+                <p className="mb-2 text-[10px] text-slate-400">{label}</p>
+                {positionFields(
+                  selectedJoint.anchors[frame],
+                  (anchor) => updateJointAnchor(selectedJoint.id, frame, anchor),
+                  document.meta.lengthUnit,
+                )}
+              </div>
+            ))}
+            <p className="text-[10px] text-slate-500">
+              Modifier un point déplace la liaison dans le repère du solide choisi et recalcule le point correspondant sur l'autre solide.
+            </p>
           </div>
           {selectedJoint.dof.length > 0 && (
             <div className="space-y-2 border-t border-slate-800 pt-3">

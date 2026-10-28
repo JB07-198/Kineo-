@@ -57,13 +57,30 @@ describe('Kineo JSON v3.0 foundation', () => {
 
   it('round-trips the canonical document without dropping nested or extension fields', () => {
     const source = structuredClone(canonicalExample) as KineoV3;
+    source.meta.title = 'Round-trip verification mechanism';
+    source.meta.author = 'Kineo audit fixture';
+    source.meta.lengthUnit = 'cm';
+    source.meta.angleUnit = 'rad';
     source.meta.customMetadata = { source: 'user', preserved: true };
     source.liaisons[0].anchors.customAnchorData = ['kept', 17];
+    source.liaisons[0].dof[0].customControlData = { mode: 'verified' };
+    source.liaisons[0].orientation = { x: 0, y: 0, z: 0.3826834324, w: 0.9238795325 };
     source.classesEquivalence[0].customClassData = { value: 42 };
+    source.jointDefinitions.PIVOT.customDefinitionData = { revision: 3 };
+    source.geometry.entities[0].style.customStyleData = ['kept'];
+    source.kinematics.customSolverData = { preserved: true };
+    source.kinematics.drivenDofs.push({
+      dofId: source.liaisons[0].dof[0].id,
+      controlType: 'POSITION',
+      targetValue: 25,
+      unit: 'deg',
+    });
     const parsed = validateKineoV3(source);
     const roundTrip = fromInternalModel(toInternalModel(parsed));
     const reopened = validateKineoV3(JSON.parse(JSON.stringify(roundTrip)));
 
+    expect(roundTrip).toEqual(source);
+    expect(reopened).toEqual(source);
     expect(detectConversionLosses(source, roundTrip)).toEqual([]);
     expect(detectConversionLosses(source, reopened)).toEqual([]);
     expect(() => validateReferences(reopened)).not.toThrow();
@@ -89,6 +106,22 @@ describe('Kineo JSON v3.0 foundation', () => {
     invalidGeometry.geometry.entities[0].classId = 'missing-class';
     expect(() => validateReferences(invalidGeometry)).toThrow(/unknown class/);
 
+    const duplicateClass = structuredClone(canonicalExample);
+    duplicateClass.classesEquivalence[1].id = duplicateClass.classesEquivalence[0].id;
+    expect(() => validateReferences(duplicateClass)).toThrow(/Duplicate class id/);
+
+    const duplicateJoint = structuredClone(canonicalExample);
+    duplicateJoint.liaisons[1].id = duplicateJoint.liaisons[0].id;
+    expect(() => validateReferences(duplicateJoint)).toThrow(/Duplicate joint id/);
+
+    const duplicateGeometry = structuredClone(canonicalExample);
+    duplicateGeometry.geometry.entities[1].id = duplicateGeometry.geometry.entities[0].id;
+    expect(() => validateReferences(duplicateGeometry)).toThrow(/Duplicate geometry id/);
+
+    const duplicateDof = structuredClone(canonicalExample);
+    duplicateDof.liaisons[1].dof[0].id = duplicateDof.liaisons[0].dof[0].id;
+    expect(() => validateReferences(duplicateDof)).toThrow(/Duplicate degree-of-freedom id/);
+
     const invalidDriver = structuredClone(canonicalExample);
     invalidDriver.kinematics.drivenDofs[0].dofId = 'missing-dof';
     expect(() => validateReferences(invalidDriver)).toThrow(/unknown id/);
@@ -97,6 +130,14 @@ describe('Kineo JSON v3.0 foundation', () => {
     cyclicParents.classesEquivalence[0].parentId = cyclicParents.classesEquivalence[1].id;
     cyclicParents.classesEquivalence[1].parentId = cyclicParents.classesEquivalence[0].id;
     expect(() => validateReferences(cyclicParents)).toThrow(/contains a cycle/);
+  });
+
+  it('does not accept inherited JavaScript properties as joint definitions', () => {
+    const invalid = structuredClone(canonicalExample);
+    invalid.liaisons[0].type = 'toString';
+    expect(() => validateReferences(invalid)).toThrow(/unknown type/);
+    expect(() => useKineoStore.getState().addJoint('toString', 'eq_0', 'eq_1', { x: 0, y: 0, z: 0 }))
+      .toThrow(/Unknown joint type/);
   });
 
   it('rejects non-finite numeric values during runtime validation', () => {
@@ -120,6 +161,7 @@ describe('Kineo JSON v3.0 foundation', () => {
     expect(afterDelete.classesEquivalence.some((body) => body.id === bodyId)).toBe(false);
     expect(afterDelete.liaisons.some((joint) => joint.classA === bodyId || joint.classB === bodyId)).toBe(false);
     expect(afterDelete.geometry.entities.some((entity) => entity.classId === bodyId)).toBe(false);
+    expect(useKineoStore.getState().selectedEntityId).toBeNull();
     expect(() => validateReferences(afterDelete)).not.toThrow();
 
     useKineoStore.getState().undo();
@@ -163,12 +205,77 @@ describe('Kineo JSON v3.0 foundation', () => {
     expect(() => validateReferences(afterDelete)).not.toThrow();
   });
 
+  it('supports body and joint CRUD, local-anchor editing, and multi-step undo/redo', () => {
+    const bodyId = useKineoStore.getState().addClass('New link', { x: 50, y: 0, z: 0 });
+    useKineoStore.getState().updateClass(bodyId, { name: 'Renamed link', rotation: Math.PI / 2 });
+    let document = useKineoStore.getState().document;
+    expect(document.classesEquivalence.find((body) => body.id === bodyId)?.name).toBe('Renamed link');
+
+    const jointId = useKineoStore.getState().addJoint('PIVOT', 'eq_0', bodyId, { x: 50, y: 0, z: 0 });
+    useKineoStore.getState().updateJoint(jointId, { name: 'Editable pivot' });
+    useKineoStore.getState().updateJointAnchor(jointId, 'onClassB', { x: 10, y: 0, z: 0 });
+    document = useKineoStore.getState().document;
+    const editedJoint = document.liaisons.find((joint) => joint.id === jointId);
+    expect(editedJoint?.name).toBe('Editable pivot');
+    expect(editedJoint?.position).toMatchObject({ x: 50, y: 10, z: 0 });
+    expect(editedJoint?.anchors.onClassB.x).toBeCloseTo(10);
+    expect(editedJoint?.anchors.onClassB.y).toBeCloseTo(0);
+    expect(editedJoint?.anchors.onClassB.z).toBe(0);
+    expect(editedJoint?.anchors.onClassA.x).toBeCloseTo(50);
+    expect(editedJoint?.anchors.onClassA.y).toBeCloseTo(10);
+    expect(() => validateReferences(document)).not.toThrow();
+
+    useKineoStore.getState().removeEntity(jointId, 'Joint');
+    expect(useKineoStore.getState().document.liaisons.some((joint) => joint.id === jointId)).toBe(false);
+    useKineoStore.getState().undo();
+    expect(useKineoStore.getState().document.liaisons.some((joint) => joint.id === jointId)).toBe(true);
+    expect(() => validateReferences(useKineoStore.getState().document)).not.toThrow();
+    useKineoStore.getState().redo();
+    expect(useKineoStore.getState().document.liaisons.some((joint) => joint.id === jointId)).toBe(false);
+    useKineoStore.getState().undo();
+    useKineoStore.getState().removeEntity(bodyId, 'Class');
+
+    const afterCascade = useKineoStore.getState();
+    expect(afterCascade.selectedEntityId).toBeNull();
+    expect(afterCascade.document.liaisons.some((joint) => joint.classA === bodyId || joint.classB === bodyId)).toBe(false);
+    expect(() => validateReferences(afterCascade.document)).not.toThrow();
+    useKineoStore.getState().undo();
+    expect(useKineoStore.getState().document.classesEquivalence.some((body) => body.id === bodyId)).toBe(true);
+    expect(() => validateReferences(useKineoStore.getState().document)).not.toThrow();
+    useKineoStore.getState().redo();
+    expect(useKineoStore.getState().document.classesEquivalence.some((body) => body.id === bodyId)).toBe(false);
+    expect(() => validateReferences(useKineoStore.getState().document)).not.toThrow();
+  });
+
+  it('does not record a deletion for an unknown geometry id', () => {
+    const before = useKineoStore.getState();
+    const historyLength = before.undoStack.length;
+    before.removeEntity('missing-geometry', 'Geometry');
+    expect(useKineoStore.getState().undoStack).toHaveLength(historyLength);
+    expect(useKineoStore.getState().document).toEqual(before.document);
+  });
+
+  it('clears selection when undo removes the selected addition', () => {
+    const bodyId = useKineoStore.getState().addClass('Temporary link', { x: 30, y: 0, z: 0 });
+    expect(useKineoStore.getState().selectedEntityId).toBe(bodyId);
+    useKineoStore.getState().undo();
+    expect(useKineoStore.getState().document.classesEquivalence.some((body) => body.id === bodyId)).toBe(false);
+    expect(useKineoStore.getState().selectedEntityId).toBeNull();
+    useKineoStore.getState().redo();
+    expect(useKineoStore.getState().document.classesEquivalence.some((body) => body.id === bodyId)).toBe(true);
+    expect(() => validateReferences(useKineoStore.getState().document)).not.toThrow();
+  });
+
   it('keeps the ground body and document unchanged after invalid import or deletion', () => {
     const store = useKineoStore.getState();
     const documentBefore = structuredClone(store.document);
     expect(() => store.removeEntity('eq_0', 'Class')).toThrow(/ground body/);
+    expect(() => store.updateClass('eq_0', { position: { x: 1, y: 0, z: 0 } })).toThrow(/ground body/);
+    expect(() => store.updateClass('eq_0', { rotation: 1 })).toThrow(/ground body/);
     expect(() => store.replaceDocument({ ...documentBefore, liaisons: [{ ...documentBefore.liaisons[0], classB: 'missing' }] }))
       .toThrow(/unknown classB/);
+    expect(() => store.replaceDocument({ meta: { schemaVersion: '3.0' } }))
+      .toThrow(/invalid|expected/i);
     expect(useKineoStore.getState().document).toEqual(documentBefore);
   });
 });

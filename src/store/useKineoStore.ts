@@ -28,6 +28,7 @@ interface KineoState {
   beginEdit: () => void;
   moveClass: (id: string, position: Vector3) => void;
   moveJoint: (id: string, position: Vector3) => void;
+  updateJointAnchor: (id: string, frame: 'onClassA' | 'onClassB', anchor: Vector3) => void;
   addJoint: (type: string, classA: string, classB: string, position: Vector3) => string;
   updateJoint: (id: string, updates: Partial<Pick<Liaison, 'name' | 'classA' | 'classB' | 'position' | 'dof'>>) => void;
   removeEntity: (id: string, type: SelectionType) => void;
@@ -66,6 +67,23 @@ function localPointForBody(world: Vector3, body: EquivalenceClass): Vector3 {
     y: -dx * Math.sin(angle) + dy * Math.cos(angle),
     z: world.z - position.z,
   };
+}
+
+function worldPointForBody(local: Vector3, body: EquivalenceClass): Vector3 {
+  const position = body.position ?? { x: 0, y: 0, z: 0 };
+  const angle = body.rotation ?? 0;
+  return {
+    x: position.x + local.x * Math.cos(angle) - local.y * Math.sin(angle),
+    y: position.y + local.x * Math.sin(angle) + local.y * Math.cos(angle),
+    z: position.z + local.z,
+  };
+}
+
+function selectionExists(document: KineoDocument, id: string | null, type: SelectionType | null): boolean {
+  if (!id || !type) return false;
+  if (type === 'Class') return document.classesEquivalence.some((item) => item.id === id);
+  if (type === 'Joint') return document.liaisons.some((item) => item.id === id);
+  return document.geometry.entities.some((item) => item.id === id);
 }
 
 function updateClassDocument(
@@ -231,11 +249,36 @@ export const useKineoStore = create<KineoState>((set) => ({
     validateDocument(document);
     return { document };
   }),
+  updateJointAnchor: (id, frame, anchor) => set((state) => {
+    const joint = state.document.liaisons.find((item) => item.id === id);
+    if (!joint) throw new Error(`Unknown joint ${id}`);
+    const bodyA = state.document.classesEquivalence.find((body) => body.id === joint.classA);
+    const bodyB = state.document.classesEquivalence.find((body) => body.id === joint.classB);
+    if (!bodyA || !bodyB) throw new Error(`Joint ${id} references a missing body`);
+    const position = worldPointForBody(anchor, frame === 'onClassA' ? bodyA : bodyB);
+    const document: KineoDocument = {
+      ...state.document,
+      liaisons: state.document.liaisons.map((item) => item.id === id
+        ? {
+            ...item,
+            position,
+            anchors: {
+              onClassA: localPointForBody(position, bodyA),
+              onClassB: localPointForBody(position, bodyB),
+            },
+          }
+        : item),
+    };
+    validateDocument(document);
+    return commitDocument(state, document);
+  }),
 
   addJoint: (type, classA, classB, position) => {
     const id = newId('link');
     set((state) => {
-      const definition = state.document.jointDefinitions[type] ?? JOINT_DEFINITIONS[type];
+      const definition = Object.hasOwn(state.document.jointDefinitions, type)
+        ? state.document.jointDefinitions[type]
+        : Object.hasOwn(JOINT_DEFINITIONS, type) ? JOINT_DEFINITIONS[type] : undefined;
       if (!definition) {
         throw new Error(`Unknown joint type ${type}`);
       }
@@ -315,11 +358,15 @@ export const useKineoStore = create<KineoState>((set) => ({
   removeEntity: (id, type) => set((state) => {
     const current = state.document;
     let document: KineoDocument;
+    let removedJointIds = new Set<string>();
+    let removedGeometryIds = new Set<string>();
     if (type === 'Class') {
       const body = current.classesEquivalence.find((item) => item.id === id);
       if (!body) return state;
       if (body.isFixed) throw new Error('The ground body cannot be deleted');
       const removedJoints = current.liaisons.filter((joint) => joint.classA === id || joint.classB === id);
+      removedJointIds = new Set(removedJoints.map((joint) => joint.id));
+      removedGeometryIds = new Set(current.geometry.entities.filter((entity) => entity.classId === id).map((entity) => entity.id));
       const removedDofIds = new Set(removedJoints.flatMap((joint) => joint.dof.map((dof) => dof.id)));
       document = {
         ...current,
@@ -349,6 +396,7 @@ export const useKineoStore = create<KineoState>((set) => ({
         },
       };
     } else {
+      if (!current.geometry.entities.some((item) => item.id === id)) return state;
       document = {
         ...current,
         geometry: {
@@ -358,9 +406,12 @@ export const useKineoStore = create<KineoState>((set) => ({
       };
     }
     validateDocument(document);
+    const selectionWasRemoved = state.selectedEntityType === 'Class' && id === state.selectedEntityId ||
+      state.selectedEntityType === 'Joint' && (id === state.selectedEntityId || removedJointIds.has(state.selectedEntityId ?? '')) ||
+      state.selectedEntityType === 'Geometry' && (id === state.selectedEntityId || removedGeometryIds.has(state.selectedEntityId ?? ''));
     return {
       ...commitDocument(state, document),
-      ...(state.selectedEntityId === id ? { selectedEntityId: null, selectedEntityType: null } : {}),
+      ...(selectionWasRemoved ? { selectedEntityId: null, selectedEntityType: null } : {}),
     };
   }),
 
@@ -389,6 +440,9 @@ export const useKineoStore = create<KineoState>((set) => ({
       document: previous,
       undoStack: state.undoStack.slice(0, -1),
       redoStack: [...state.redoStack, state.document],
+      ...(!selectionExists(previous, state.selectedEntityId, state.selectedEntityType)
+        ? { selectedEntityId: null, selectedEntityType: null }
+        : {}),
     };
   }),
   redo: () => set((state) => {
@@ -398,6 +452,9 @@ export const useKineoStore = create<KineoState>((set) => ({
       document: next,
       undoStack: [...state.undoStack, state.document],
       redoStack: state.redoStack.slice(0, -1),
+      ...(!selectionExists(next, state.selectedEntityId, state.selectedEntityType)
+        ? { selectedEntityId: null, selectedEntityType: null }
+        : {}),
     };
   }),
 }));

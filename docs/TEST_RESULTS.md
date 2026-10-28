@@ -1,54 +1,76 @@
-# Kineo v0.0 / v0.1 — Test Results
+# Kineo v0.1 — Test Results
 
 ## Environment
 
 - Node.js `v22.22.2`
 - npm `10.9.7`
-- Browser smoke test against the local Vite development server
+- Vite `8.3.5`
+- Integrated Playwright browser against the local Vite development server
 
 ## Automated checks
 
-| Check | Result | Notes |
+| Check | Result | Evidence |
 |---|---|---|
-| `npm ci` | PASS | Installed from the lockfile. npm reported one high-severity audit advisory; it was not assessed or remediated in this task. |
 | `npm run typecheck` | PASS | `tsc -b` completed without errors. |
 | `npm run lint` | PASS | ESLint completed without warnings or errors. |
-| `npm test` | PASS | 1 test file, 10 tests passed. |
-| `npm run build` | PASS | TypeScript project build and Vite production bundle completed (29 modules transformed). |
-| `git diff --check` | PASS | No whitespace errors. |
+| `npm test` | PASS | 1 test file, 14 tests passed. |
+| `npm run build` | PASS | TypeScript build and Vite production build completed; 123 modules transformed. |
+| `npm audit` | PASS | 0 vulnerabilities after upgrading Zod to `4.6.7`. |
+| `npm audit --omit=dev` | PASS | 0 production vulnerabilities. |
+| `git diff --check` | PASS | No whitespace errors in the audited changes. |
 
-For the Pages fix, the GitHub Actions build is additionally verified with
-`GITHUB_ACTIONS=true npm run build`; the emitted HTML points to
-`/Kineo-/assets/...` and `/Kineo-/favicon.svg` rather than the unprefixed site root.
+The regression tests load the original JSON v3.0 fixture directly from the repository's
+specification file using a relative module URL. They test structural round-trip
+preservation for non-default metadata and units, definitions, multiple rigid bodies
+and liaisons, local anchors, quaternion orientation, driven DOFs, geometry and nested
+extension fields. Store coverage includes reference failures, invalid import safety,
+body/joint CRUD, local-anchor edits, dependent-reference cascades, ground protection,
+and multi-step undo/redo.
 
-Coverage includes validation of the original JSON v3.0 example, lossless conversion
-and serialization/reopening including unfamiliar nested properties, valid store import,
-missing/invalid references, numeric limits, joint-library completion, body/joint
-editing, local attachment transforms, cascading deletion, and undo/redo.
+## Browser and JSON save/reopen
 
-## Browser smoke test
+Verified against the running application:
 
-Verified in the rendered local application:
+- Created and renamed a body, added a pivot, edited its local attachment point, and
+  observed the edited inspector value. Undo and redo restored the anchor values.
+- Dragged the body with snapping enabled: its coordinates changed from `(250, 0)` to
+  `(260, 10)`.
+- Zoom changed from `170%` to `190%`; Shift-drag panning left the model coordinates
+  unchanged. No console errors were observed after correcting the wheel listener.
+- At viewport sizes `1024x768` and `1280x800`, the canvas measured `479x676` and
+  `735x708` pixels respectively. This verifies canvas resizing, not a mobile layout
+  or automatic scene refit.
+- Deleting the created body removed its dependent joint. Undo restored both; redo
+  removed both again. Exported references after redo were checked against existing
+  bodies and DOFs.
+- A malformed JSON import displayed an explicit error and left the five-body,
+  five-joint document unchanged.
 
-- The slider-crank example displays in the 2D viewport with all four bodies and four
-  joints visible.
-- Selecting a body opens its inspector properties.
-- Creating a body and a pivot adds them to the entity list and updates counts.
-- Undo and redo return the liaison list to the expected counts.
-- Dragging the crank updates the inspector position with snapping enabled.
-- The JSON save control runs and reports its export status.
-- A valid JSON v3 file was imported through the browser file picker; an invalid text
-  file displayed an explicit parse error and left the imported document unchanged.
-- No browser console errors were observed in the final interaction pass.
+The real **Enregistrer JSON** action was triggered in the browser. The browser
+download event did not arrive within 10 seconds, so no OS/browser download path was
+available to inspect. As an integration fallback, the test captured the filename and
+Blob URL from the action's actual download anchor, fetched and parsed the generated
+Blob (`Bielle-manivelle-piston.json`, 11,374 characters), imported that content through
+the application's file-input handler, and triggered a second save. A recursive
+structural comparison of the two JSON objects was equal. The import handler's success
+status confirms the captured JSON passed runtime schema and reference validation.
+The user additionally reports manually verifying in Google Chrome that a real
+downloaded JSON file can be reopened and that the mechanism is preserved. That
+manual verification is user-reported rather than independently captured in this
+browser session.
 
-The browser harness did not capture and inspect the downloaded JSON artifact. The
-model-level tests verify serialization/reopening and valid import through the same
-validation/store actions; checking the saved file in a normal browser download flow
-remains advisable.
+## Scope and limitations
 
-## Not verified / remaining
+- No kinematic solver or motion simulation is present in v0.1. A drawn joint is not
+  proof of a mechanically satisfied constraint; dragging one body does not solve or
+  reposition the other connected body.
+- The default mechanism has a fixed ground body, but the UI does not designate a
+  different ground body.
+- 3D, graph/split rendering, formal ISO/AFNOR symbol certification, mobility and
+  hyperstatism calculations, image export, autosave, and mobile-specific layout are
+  not verified v0.1 features.
+- Browser-managed download-file capture remains limited by the integrated browser
+  harness as described above.
 
-- GitHub Actions has been configured but no remote workflow run was triggered.
-- The npm audit advisory noted during dependency installation was not investigated.
-- 3D, graph rendering, kinematic solving, motion simulation, mobility/hyperstatism,
-  SVG/PNG export, and autosave remain out of scope for v0.1.
+See [`FINAL_VALIDATION_V0.1.md`](./FINAL_VALIDATION_V0.1.md) for the full audit,
+security findings, release checklist, and verdict.

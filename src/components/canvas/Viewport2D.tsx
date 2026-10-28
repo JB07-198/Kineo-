@@ -34,6 +34,19 @@ function distanceToSegment(point: Point, start: Point, end: Point): number {
   return Math.hypot(point.x - start.x - ratio * dx, point.y - start.y - ratio * dy);
 }
 
+function isPointInPolygon(point: Point, polygon: Point[]): boolean {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const currentPoint = polygon[index];
+    const previousPoint = polygon[previous];
+    const crosses = (currentPoint.y > point.y) !== (previousPoint.y > point.y) &&
+      point.x < (previousPoint.x - currentPoint.x) * (point.y - currentPoint.y) /
+        (previousPoint.y - currentPoint.y) + currentPoint.x;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
 function entityWorldPoints(entity: GeometryEntity, position: Vector3, rotation: number): Point[] {
   const localPoints = entity.localPoints;
   if (entity.kind === 'rectangle' && localPoints.length >= 2) {
@@ -293,6 +306,32 @@ export const Viewport2D: React.FC = () => {
     return () => window.cancelAnimationFrame(frame);
   }, [fitToScene]);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const cursor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      setView((current) => {
+        const anchor = {
+          x: (cursor.x - rect.width / 2) / current.scale + current.center.x,
+          y: -(cursor.y - rect.height / 2) / current.scale + current.center.y,
+        };
+        const scale = Math.max(0.25, Math.min(12, current.scale * (event.deltaY < 0 ? 1.12 : 1 / 1.12)));
+        return {
+          scale,
+          center: {
+            x: anchor.x - (cursor.x - rect.width / 2) / scale,
+            y: anchor.y + (cursor.y - rect.height / 2) / scale,
+          },
+        };
+      });
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, []);
+
   const pointerToWorld = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
     const rect = event.currentTarget.getBoundingClientRect();
     return {
@@ -311,10 +350,10 @@ export const Viewport2D: React.FC = () => {
       const points = entityWorldPoints(entity, body.position ?? { x: 0, y: 0, z: 0 }, body.rotation ?? 0)
         .map((point) => worldToScreen(point, view, bounds.width, bounds.height));
       if (entity.kind === 'rectangle' && points.length >= 4) {
-        const xs = points.map(({ x }) => x);
-        const ys = points.map(({ y }) => y);
-        if (screenPoint.x >= Math.min(...xs) - 8 && screenPoint.x <= Math.max(...xs) + 8 &&
-            screenPoint.y >= Math.min(...ys) - 8 && screenPoint.y <= Math.max(...ys) + 8) return body.id;
+        if (isPointInPolygon(screenPoint, points) ||
+            points.some((point, index) => distanceToSegment(screenPoint, point, points[(index + 1) % points.length]) <= 8)) {
+          return body.id;
+        }
       } else {
         for (let index = 1; index < points.length; index += 1) {
           if (distanceToSegment(screenPoint, points[index - 1], points[index]) <= 9) return body.id;
@@ -392,26 +431,6 @@ export const Viewport2D: React.FC = () => {
     else moveJoint(drag.id, position);
   };
 
-  const onWheel = (event: React.WheelEvent<HTMLCanvasElement>) => {
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const cursor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    setView((current) => {
-      const anchor = {
-        x: (cursor.x - rect.width / 2) / current.scale + current.center.x,
-        y: -(cursor.y - rect.height / 2) / current.scale + current.center.y,
-      };
-      const scale = Math.max(0.25, Math.min(12, current.scale * (event.deltaY < 0 ? 1.12 : 1 / 1.12)));
-      return {
-        scale,
-        center: {
-          x: anchor.x - (cursor.x - rect.width / 2) / scale,
-          y: anchor.y + (cursor.y - rect.height / 2) / scale,
-        },
-      };
-    });
-  };
-
   const endDrag = () => { dragRef.current = null; };
 
   return (
@@ -425,7 +444,6 @@ export const Viewport2D: React.FC = () => {
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onContextMenu={(event) => event.preventDefault()}
-        onWheel={onWheel}
       />
       <div className="absolute left-3 top-3 flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-900/95 p-1 shadow-lg">
         <button className={`viewport-button ${gridVisible ? 'viewport-button-active' : ''}`} onClick={toggleGrid} title="Afficher ou masquer la grille">

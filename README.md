@@ -40,7 +40,7 @@ automatically inside GitHub Actions.
 
 - Add rigid bodies from **+ Solide**; the ground is fixed and protected from deletion.
 - Choose a joint symbol to connect the selected body to the ground. Edit either endpoint,
-  position, name, or joint DOF values in the inspector.
+  position, name, local attachment points, or joint DOF values in the inspector.
 - Drag a body or joint to move it. **Maj + glisser** pans the view; the wheel and toolbar
   buttons zoom. Grid visibility and 10-unit snapping are toggled in the canvas toolbar.
 - Use **Ctrl/Cmd + Z** and **Ctrl/Cmd + Y** (or the toolbar) to undo and redo document edits.

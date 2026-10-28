@@ -27,7 +27,9 @@ export const Header: React.FC = () => {
       const link = window.document.createElement('a');
       link.href = url;
       link.download = `${document.meta.title.trim().replace(/[^a-z0-9_-]+/gi, '-') || 'kineo-mechanism'}.json`;
+      window.document.body.appendChild(link);
       link.click();
+      link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage('Document JSON v3.0 exporté.');
     } catch (error) {

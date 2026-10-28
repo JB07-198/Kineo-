@@ -45,7 +45,7 @@ export function validateReferences(doc: KineoV3): void {
     if (joint.classA === joint.classB) {
       throw new Error(`Joint ${joint.id} cannot connect a class to itself`);
     }
-    if (!doc.jointDefinitions[joint.type]) {
+    if (!Object.hasOwn(doc.jointDefinitions, joint.type)) {
       throw new Error(`Joint ${joint.id} uses unknown type ${joint.type}`);
     }
     for (const dof of joint.dof) {
