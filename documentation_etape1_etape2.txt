@@ -1,3 +1,8 @@
+NOTE v0.3.0 : spécification initiale historique (nom initial CinémaLab).
+L’implémentation actuelle Kineo, ses équations planes et ses limites sont décrites
+par README.md, docs/SOLVER_V0.3.md et docs/KNOWN_LIMITATIONS.md.
+Le schéma documentaire reste JSON v3.0 ; le modèle canonique ci-dessous est conservé.
+
 ================================================================================
                     CINEMALAB - SPECIFICATIONS DU PROJET
 ================================================================================

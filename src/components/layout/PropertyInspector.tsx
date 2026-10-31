@@ -49,7 +49,7 @@ const positionFields = (
 );
 
 export const PropertyInspector: React.FC = () => {
-  const { document, selectedEntityId, selectedEntityType, updateClass, updateJoint, updateJointAnchor, removeEntity } = useKineoStore();
+  const { document, selectedEntityId, selectedEntityType, updateClass, setGround, updateJoint, updateJointAnchor, removeEntity } = useKineoStore();
   const selectedClass = selectedEntityType === 'Class'
     ? document.classesEquivalence.find((body) => body.id === selectedEntityId)
     : undefined;
@@ -105,6 +105,7 @@ export const PropertyInspector: React.FC = () => {
           <p className="text-[10px] text-slate-500">
             {selectedClass.isFixed ? 'Bâti — repère de référence fixe.' : 'Déplacez le solide dans la scène ou modifiez son repère ici.'}
           </p>
+          {!selectedClass.isFixed && <button className="toolbar-button" onClick={() => setGround(selectedClass.id)}>Définir comme bâti unique</button>}
           {!selectedClass.isFixed && (
             <button onClick={() => removeEntity(selectedClass.id, 'Class')} className="danger-button">
               Supprimer le solide
@@ -174,6 +175,23 @@ export const PropertyInspector: React.FC = () => {
               Modifier un point déplace la liaison dans le repère du solide choisi et recalcule le point correspondant sur l'autre solide.
             </p>
           </div>
+          {['GLISSIERE', 'PIVOT_GLISSANT'].includes(selectedJoint.type) && (() => {
+            const axis = selectedJoint.dof.find((dof) => dof.type === 'translation')?.axisLocal;
+            return axis ? numberInput('Direction de translation dans le repère A', Math.atan2(axis.y, axis.x) * 180 / Math.PI, (degrees) => {
+              const angle = degrees * Math.PI / 180;
+              const bodyA = document.classesEquivalence.find((body) => body.id === selectedJoint.classA);
+              const worldAngle = angle + (bodyA?.rotation ?? 0);
+              updateJoint(selectedJoint.id, {
+                dof: selectedJoint.dof.map((dof) => dof.type === 'translation' || selectedJoint.type === 'PIVOT_GLISSANT'
+                  ? { ...dof, axisLocal: { ...dof.axisLocal, x: Math.cos(angle), y: Math.sin(angle), z: 0 } } : dof),
+                orientation: { x: 0, y: 0, z: Math.sin(worldAngle / 2), w: Math.cos(worldAngle / 2) },
+              });
+            }, 'deg') : null;
+          })()}
+          {['GLISSIERE', 'PIVOT_GLISSANT', 'ENCASTREMENT'].includes(selectedJoint.type) && numberInput('Angle relatif de référence B − A', (typeof selectedJoint.referenceAngle === 'number' ? selectedJoint.referenceAngle :
+            (document.classesEquivalence.find((b) => b.id === selectedJoint.classB)?.rotation ?? 0) - (document.classesEquivalence.find((b) => b.id === selectedJoint.classA)?.rotation ?? 0)) * 180 / Math.PI,
+            (degrees) => updateJoint(selectedJoint.id, { referenceAngle: degrees * Math.PI / 180 }), 'deg')}
+          <p className="text-[10px] text-slate-500">Les valeurs DOF ci-dessous sont les métadonnées du document. Le mouvement se pilote dans Analyse / Simulation.</p>
           {selectedJoint.dof.length > 0 && (
             <div className="space-y-2 border-t border-slate-800 pt-3">
               <h3 className="text-[11px] font-semibold text-slate-300">Degrés de liberté ({selectedJoint.dof.length})</h3>

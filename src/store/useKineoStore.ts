@@ -14,6 +14,8 @@ interface KineoState {
   activeAppMode: 'Edit' | 'Simulation';
   selectedEntityId: string | null;
   selectedEntityType: SelectionType | null;
+  documentRevision: number;
+  savedDocumentJson: string;
   gridVisible: boolean;
   snapEnabled: boolean;
   undoStack: KineoDocument[];
@@ -23,6 +25,8 @@ interface KineoState {
   selectEntity: (id: string | null, type: SelectionType | null) => void;
   toggleGrid: () => void;
   toggleSnap: () => void;
+  addGround: () => string;
+  setGround: (id: string) => void;
   addClass: (name: string, position: Vector3) => string;
   updateClass: (id: string, updates: Partial<Pick<EquivalenceClass, 'name' | 'color' | 'position' | 'rotation'>>) => void;
   beginEdit: () => void;
@@ -30,15 +34,17 @@ interface KineoState {
   moveJoint: (id: string, position: Vector3) => void;
   updateJointAnchor: (id: string, frame: 'onClassA' | 'onClassB', anchor: Vector3) => void;
   addJoint: (type: string, classA: string, classB: string, position: Vector3) => string;
-  updateJoint: (id: string, updates: Partial<Pick<Liaison, 'name' | 'classA' | 'classB' | 'position' | 'dof'>>) => void;
+  updateJoint: (id: string, updates: Partial<Pick<Liaison, 'name' | 'classA' | 'classB' | 'position' | 'dof' | 'orientation' | 'referenceAngle'>>) => void;
   removeEntity: (id: string, type: SelectionType) => void;
   replaceDocument: (document: unknown) => void;
+  markDocumentSaved: () => void;
   setTitle: (title: string) => void;
   undo: () => void;
   redo: () => void;
 }
 
 const initialDocument = createDefaultDocument();
+const initialSavedDocumentJson = JSON.stringify(initialDocument);
 
 function commitDocument(state: KineoState, document: KineoDocument): Partial<KineoState> {
   return {
@@ -138,12 +144,14 @@ function updateClassDocument(
   };
 }
 
-export const useKineoStore = create<KineoState>((set) => ({
+export const useKineoStore = create<KineoState>((set, get) => ({
   document: initialDocument,
   activeViewMode: '2D',
   activeAppMode: 'Edit',
   selectedEntityId: null,
   selectedEntityType: null,
+  documentRevision: 0,
+  savedDocumentJson: initialSavedDocumentJson,
   gridVisible: true,
   snapEnabled: true,
   undoStack: [],
@@ -155,11 +163,35 @@ export const useKineoStore = create<KineoState>((set) => ({
   toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
   toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
 
+  addGround: () => {
+    const existing = get().document.classesEquivalence.find((body) => body.isFixed);
+    if (existing) return existing.id;
+    const id = newId('ground');
+    set((state) => ({
+      ...commitDocument(state, {
+        ...state.document,
+        classesEquivalence: [...state.document.classesEquivalence, {
+          id, name: 'Bâti', color: '#64748b', isFixed: true, parentId: null,
+          position: { x: 0, y: 0, z: 0 }, rotation: 0,
+        }],
+      }),
+      selectedEntityId: id, selectedEntityType: 'Class',
+    }));
+    return id;
+  },
+  setGround: (id) => set((state) => {
+    if (!state.document.classesEquivalence.some((body) => body.id === id)) throw new Error('Solide introuvable');
+    return commitDocument(state, {
+      ...state.document,
+      classesEquivalence: state.document.classesEquivalence.map((body) => ({ ...body, isFixed: body.id === id })),
+    });
+  }),
+
   addClass: (name, position) => {
     const id = newId('eq');
     set((state) => {
       const palette = ['#e63946', '#2a9d8f', '#457b9d', '#f4a261', '#9b5de5'];
-      const index = state.document.classesEquivalence.length - 1;
+      const index = Math.max(0, state.document.classesEquivalence.length - 1);
       const body: EquivalenceClass = {
         id,
         name,
@@ -263,6 +295,7 @@ export const useKineoStore = create<KineoState>((set) => ({
             ...item,
             position,
             anchors: {
+              ...item.anchors,
               onClassA: localPointForBody(position, bodyA),
               onClassB: localPointForBody(position, bodyB),
             },
@@ -418,15 +451,20 @@ export const useKineoStore = create<KineoState>((set) => ({
   replaceDocument: (input) => {
     const document = validateKineoV3(input);
     validateReferences(document);
+    const snapshot = structuredClone(document);
     set((state) => ({
       ...state,
-      document: structuredClone(document),
+      document: snapshot,
+      savedDocumentJson: JSON.stringify(snapshot),
       undoStack: [],
       redoStack: [],
       selectedEntityId: null,
       selectedEntityType: null,
+      documentRevision: state.documentRevision + 1,
     }));
   },
+
+  markDocumentSaved: () => set((state) => ({ savedDocumentJson: JSON.stringify(state.document) })),
 
   setTitle: (title) => set((state) => {
     const document = { ...state.document, meta: { ...state.document.meta, title } };
@@ -461,3 +499,5 @@ export const useKineoStore = create<KineoState>((set) => ({
 
 export const selectUndoAvailable = (state: KineoState): boolean => state.undoStack.length > 0;
 export const selectRedoAvailable = (state: KineoState): boolean => state.redoStack.length > 0;
+export const selectDocumentDirty = (state: KineoState): boolean =>
+  JSON.stringify(state.document) !== state.savedDocumentJson;
