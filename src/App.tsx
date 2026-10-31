@@ -10,6 +10,8 @@ import { useSimulationClock } from './components/kinematics/useSimulationClock';
 import { startDocumentLifecycle } from './services/documentLifecycle';
 import { useSimulationStore } from './store/useSimulationStore';
 import { useKineoStore } from './store/useKineoStore';
+import { NomenclaturePanel } from './components/layout/NomenclaturePanel';
+import { useEditorToolStore } from './store/useEditorToolStore';
 
 export const App: React.FC = () => {
   const { activeViewMode, activeAppMode, setAppMode } = useKineoStore();
@@ -20,6 +22,10 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        useEditorToolStore.getState().finish();
+        return;
+      }
       const target = event.target;
       if (target instanceof HTMLElement &&
           (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
@@ -52,6 +58,12 @@ export const App: React.FC = () => {
         <div className="flex gap-2">
           {preview && <button className="toolbar-button" onClick={() => useSimulationStore.getState().reset()}>Revenir à l’édition</button>}
           <button className="toolbar-button" onClick={() => { if (activeAppMode === 'Simulation') useSimulationStore.getState().pause(); setAppMode(activeAppMode === 'Edit' ? 'Simulation' : 'Edit'); }}>{activeAppMode === 'Edit' ? 'Analyse / Simulation' : 'Propriétés'}</button>
+          <button
+            className={`toolbar-button ${activeAppMode === 'Nomenclature' ? 'border-indigo-500 text-white' : ''}`}
+            onClick={() => setAppMode(activeAppMode === 'Nomenclature' ? 'Edit' : 'Nomenclature')}
+          >
+            Nomenclature
+          </button>
         </div>
       </div>
 
@@ -85,7 +97,11 @@ export const App: React.FC = () => {
           )}
         </main>
 
-        {activeAppMode === 'Simulation' ? <KinematicsPanel /> : <div inert={!!preview}><PropertyInspector /></div>}
+        {activeAppMode === 'Simulation'
+          ? <KinematicsPanel />
+          : activeAppMode === 'Nomenclature'
+            ? <NomenclaturePanel />
+            : <div inert={!!preview}><PropertyInspector /></div>}
       </div>
 
       <StatusBar />

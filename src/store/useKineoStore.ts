@@ -1,17 +1,20 @@
 import { create } from 'zustand';
 import type { EquivalenceClass, KineoDocument } from '../types/kineo';
-import type { Liaison, Vector3 } from '../model/jsonV3';
+import { changeShape, resizeGeometry } from '../model/graphics';
+import type { ShapeKind } from '../model/graphics';
+import { referenceBody } from '../model/nomenclature';
+import type { DisplaySettings, GeometryEntity, GroundFixation, Liaison, Vector3 } from '../model/jsonV3';
 import { createDefaultDocument, JOINT_DEFINITIONS } from '../model/defaultDocument';
 import { validateReferences } from '../model/conversion';
 import { validateKineoV3 } from '../model/validation';
 
-type SelectionType = 'Class' | 'Joint' | 'Geometry';
+type SelectionType = 'Class' | 'Joint' | 'Geometry' | 'Fixation';
 type ViewMode = '2D' | '3D' | 'Graph' | 'Split';
 
 interface KineoState {
   document: KineoDocument;
   activeViewMode: ViewMode;
-  activeAppMode: 'Edit' | 'Simulation';
+  activeAppMode: 'Edit' | 'Simulation' | 'Nomenclature';
   selectedEntityId: string | null;
   selectedEntityType: SelectionType | null;
   documentRevision: number;
@@ -21,11 +24,17 @@ interface KineoState {
   undoStack: KineoDocument[];
   redoStack: KineoDocument[];
   setViewMode: (mode: ViewMode) => void;
-  setAppMode: (mode: 'Edit' | 'Simulation') => void;
+  setAppMode: (mode: 'Edit' | 'Simulation' | 'Nomenclature') => void;
   selectEntity: (id: string | null, type: SelectionType | null) => void;
   toggleGrid: () => void;
   toggleSnap: () => void;
   addGround: () => string;
+  fixBody: (bodyId: string, position: Vector3, angle: number, orientationMode?: GroundFixation['orientationMode']) => string;
+  updateFixation: (id: string, patch: Partial<Pick<GroundFixation, 'localPoint' | 'angle' | 'orientationMode'>>, history?: boolean) => void;
+  setBodyShape: (bodyId: string, kind: ShapeKind, entityId?: string) => void;
+  updateGeometry: (id: string, updates: Partial<Pick<GeometryEntity, 'kind' | 'localPoints' | 'style' | 'cornerRadius'>>, history?: boolean) => void;
+  resizeShape: (id: string, width: number, height: number, history?: boolean) => void;
+  setDisplay: (patch: Partial<DisplaySettings>) => void;
   setGround: (id: string) => void;
   addClass: (name: string, position: Vector3) => string;
   updateClass: (id: string, updates: Partial<Pick<EquivalenceClass, 'name' | 'color' | 'position' | 'rotation'>>) => void;
@@ -33,8 +42,8 @@ interface KineoState {
   moveClass: (id: string, position: Vector3) => void;
   moveJoint: (id: string, position: Vector3) => void;
   updateJointAnchor: (id: string, frame: 'onClassA' | 'onClassB', anchor: Vector3) => void;
-  addJoint: (type: string, classA: string, classB: string, position: Vector3) => string;
-  updateJoint: (id: string, updates: Partial<Pick<Liaison, 'name' | 'classA' | 'classB' | 'position' | 'dof' | 'orientation' | 'referenceAngle'>>) => void;
+  addJoint: (type: string, classA: string, classB: string, position: Vector3, angle?: number) => string;
+  updateJoint: (id: string, updates: Partial<Pick<Liaison, 'name' | 'type' | 'classA' | 'classB' | 'position' | 'dof' | 'orientation' | 'referenceAngle'>>) => void;
   removeEntity: (id: string, type: SelectionType) => void;
   replaceDocument: (document: unknown) => void;
   markDocumentSaved: () => void;
@@ -87,6 +96,7 @@ function worldPointForBody(local: Vector3, body: EquivalenceClass): Vector3 {
 
 function selectionExists(document: KineoDocument, id: string | null, type: SelectionType | null): boolean {
   if (!id || !type) return false;
+  if (type === 'Fixation') return document.classesEquivalence.some((body) => body.groundFixation?.id === id);
   if (type === 'Class') return document.classesEquivalence.some((item) => item.id === id);
   if (type === 'Joint') return document.liaisons.some((item) => item.id === id);
   return document.geometry.entities.some((item) => item.id === id);
@@ -163,6 +173,54 @@ export const useKineoStore = create<KineoState>((set, get) => ({
   toggleGrid: () => set((state) => ({ gridVisible: !state.gridVisible })),
   toggleSnap: () => set((state) => ({ snapEnabled: !state.snapEnabled })),
 
+  fixBody: (bodyId, position, angle, orientationMode = 'manual') => {
+    const body = get().document.classesEquivalence.find((b) => b.id === bodyId);
+    if (!body || !Number.isFinite(angle)) throw new Error('Sélectionnez un solide existant et une orientation valide.');
+    const id = body.groundFixation?.id ?? newId('fixation');
+    set((state) => {
+      const document = { ...state.document, classesEquivalence: state.document.classesEquivalence.map((b) => b.id !== bodyId ? b : {
+        ...b, isFixed: true, groundFixation: {
+          id, type: 'GROUND_FIXATION' as const, localPoint: localPointForBody(position, b),
+          angle: angle - (b.rotation ?? 0), wasFixed: b.groundFixation?.wasFixed ?? b.isFixed,
+          orientationMode,
+        },
+      }) };
+      validateDocument(document);
+      return { ...commitDocument(state, document), selectedEntityId: id, selectedEntityType: 'Fixation' as const };
+    });
+    return id;
+  },
+  updateFixation: (id, patch, history = true) => set((state) => {
+    if (!state.document.classesEquivalence.some((b) => b.groundFixation?.id === id)) throw new Error('Fixation introuvable.');
+    const document = { ...state.document, classesEquivalence: state.document.classesEquivalence.map((b) => b.groundFixation?.id === id
+      ? { ...b, groundFixation: { ...b.groundFixation, ...patch } } : b) };
+    validateDocument(document);
+    return history ? commitDocument(state, document) : { document };
+  }),
+  setBodyShape: (bodyId, kind, entityId) => {
+    const state = get(), body = state.document.classesEquivalence.find((b) => b.id === bodyId);
+    if (!body) throw new Error('Solide introuvable.');
+    const entity = state.document.geometry.entities.find((g) => entityId ? g.id === entityId && g.classId === bodyId : g.classId === bodyId);
+    if (entity) get().updateGeometry(entity.id, changeShape(entity, kind));
+    else set((current) => commitDocument(current, { ...current.document, geometry: { ...current.document.geometry, entities: [...current.document.geometry.entities,
+      changeShape({ id: newId('ent'), classId: bodyId, kind: 'segment', localPoints: [{ x: 0, y: 0, z: 0 }, { x: 60, y: 0, z: 0 }], style: { stroke: 'solid', width: 2, color: body.color }, view: '2D' }, kind),
+    ] } }));
+  },
+  updateGeometry: (id, updates, history = true) => set((state) => {
+    if (!state.document.geometry.entities.some((g) => g.id === id)) throw new Error('Géométrie introuvable.');
+    const document = { ...state.document, geometry: { ...state.document.geometry, entities: state.document.geometry.entities.map((g) => g.id === id ? { ...g, ...updates } : g) } };
+    validateDocument(document);
+    return history ? commitDocument(state, document) : { document };
+  }),
+  resizeShape: (id, width, height, history = true) => {
+    const entity = get().document.geometry.entities.find((g) => g.id === id);
+    if (!entity) throw new Error('Géométrie introuvable.');
+    get().updateGeometry(id, { localPoints: resizeGeometry(entity, width, height).localPoints }, history);
+  },
+  setDisplay: (patch) => set((state) => commitDocument(state, { ...state.document, geometry: {
+    ...state.document.geometry, display: { bodyIds: true, jointIds: true, anchors: false, ...state.document.geometry.display, ...patch },
+  } })),
+
   addGround: () => {
     const existing = get().document.classesEquivalence.find((body) => body.isFixed);
     if (existing) return existing.id;
@@ -183,7 +241,10 @@ export const useKineoStore = create<KineoState>((set, get) => ({
     if (!state.document.classesEquivalence.some((body) => body.id === id)) throw new Error('Solide introuvable');
     return commitDocument(state, {
       ...state.document,
-      classesEquivalence: state.document.classesEquivalence.map((body) => ({ ...body, isFixed: body.id === id })),
+      meta: { ...state.document.meta, groundBodyId: id },
+      classesEquivalence: state.document.classesEquivalence.map((body) => ({ ...body, isFixed: body.id === id || !!body.groundFixation,
+        ...(body.groundFixation ? { groundFixation: { ...body.groundFixation, wasFixed: body.id === id } } : {}),
+      })),
     });
   }),
 
@@ -306,7 +367,7 @@ export const useKineoStore = create<KineoState>((set, get) => ({
     return commitDocument(state, document);
   }),
 
-  addJoint: (type, classA, classB, position) => {
+  addJoint: (type, classA, classB, position, angle = 0) => {
     const id = newId('link');
     set((state) => {
       const definition = Object.hasOwn(state.document.jointDefinitions, type)
@@ -328,7 +389,7 @@ export const useKineoStore = create<KineoState>((set, get) => ({
         classA,
         classB,
         position,
-        orientation: { x: 0, y: 0, z: 0, w: 1 },
+        orientation: { x: 0, y: 0, z: Math.sin(angle / 2), w: Math.cos(angle / 2) },
         anchors: {
           onClassA: localPointForBody(position, bodyA),
           onClassB: localPointForBody(position, bodyB),
@@ -336,7 +397,7 @@ export const useKineoStore = create<KineoState>((set, get) => ({
         dof: definition.dofTemplate.map((template, index) => ({
           id: `${id}_dof_${index + 1}`,
           type: template.type,
-          axisLocal: template.defaultAxisLocal,
+          axisLocal: template.type === 'translation' ? { x: Math.cos(angle - (bodyA.rotation ?? 0)), y: Math.sin(angle - (bodyA.rotation ?? 0)), z: 0 } : template.defaultAxisLocal,
           min: template.defaultMin,
           max: template.defaultMax,
           value: 0,
@@ -370,6 +431,14 @@ export const useKineoStore = create<KineoState>((set, get) => ({
       liaisons: state.document.liaisons.map((joint) => {
         if (joint.id !== id) return joint;
         const updated = { ...joint, ...updates };
+        if (updates.type && updates.type !== joint.type) {
+          const template = state.document.jointDefinitions[updates.type];
+          if (!template) throw new Error('Type de liaison inconnu.');
+          updated.dof = template.dofTemplate.map((dof, index) => ({
+            id: newId(`dof_${index}`), type: dof.type, axisLocal: { ...dof.defaultAxisLocal },
+            min: dof.defaultMin, max: dof.defaultMax, value: Math.max(dof.defaultMin, Math.min(0, dof.defaultMax)), unit: dof.unit,
+          }));
+        }
         if (updates.position || updates.classA || updates.classB) {
           const bodyA = state.document.classesEquivalence.find((body) => body.id === updated.classA);
           const bodyB = state.document.classesEquivalence.find((body) => body.id === updated.classB);
@@ -384,6 +453,8 @@ export const useKineoStore = create<KineoState>((set, get) => ({
         return updated;
       }),
     };
+    const dofIds = new Set(document.liaisons.flatMap((joint) => joint.dof.map((dof) => dof.id)));
+    document.kinematics = { ...document.kinematics, drivenDofs: document.kinematics.drivenDofs.filter((dof) => dofIds.has(dof.dofId)) };
     validateDocument(document);
     return commitDocument(state, document);
   }),
@@ -393,7 +464,18 @@ export const useKineoStore = create<KineoState>((set, get) => ({
     let document: KineoDocument;
     let removedJointIds = new Set<string>();
     let removedGeometryIds = new Set<string>();
-    if (type === 'Class') {
+    if (type === 'Fixation') {
+      const body = current.classesEquivalence.find((b) => b.groundFixation?.id === id);
+      if (!body?.groundFixation) return state;
+      const wasFixed = body.groundFixation.wasFixed;
+      document = { ...current, classesEquivalence: current.classesEquivalence.map((b) => {
+        if (b.id !== body.id) return b;
+        const copy = { ...b, isFixed: wasFixed }; delete copy.groundFixation; return copy;
+      }) };
+      if (referenceBody(document)?.id !== current.meta.groundBodyId) {
+        document = { ...document, meta: { ...document.meta } }; delete document.meta.groundBodyId;
+      }
+    } else if (type === 'Class') {
       const body = current.classesEquivalence.find((item) => item.id === id);
       if (!body) return state;
       if (body.isFixed) throw new Error('The ground body cannot be deleted');
@@ -439,7 +521,8 @@ export const useKineoStore = create<KineoState>((set, get) => ({
       };
     }
     validateDocument(document);
-    const selectionWasRemoved = state.selectedEntityType === 'Class' && id === state.selectedEntityId ||
+    const selectionWasRemoved = state.selectedEntityType === 'Fixation' && state.selectedEntityId === id ||
+      state.selectedEntityType === 'Class' && id === state.selectedEntityId ||
       state.selectedEntityType === 'Joint' && (id === state.selectedEntityId || removedJointIds.has(state.selectedEntityId ?? '')) ||
       state.selectedEntityType === 'Geometry' && (id === state.selectedEntityId || removedGeometryIds.has(state.selectedEntityId ?? ''));
     return {

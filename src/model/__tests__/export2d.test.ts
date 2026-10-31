@@ -3,7 +3,7 @@ import { createDefaultDocument } from '../defaultDocument';
 import { createSvgExport, renderSvgAsPng } from '../export2d';
 
 describe('2D SVG export', () => {
-  it('creates a standalone, sized SVG with body geometry, labels, joints, and ground', () => {
+  it('creates a standalone, sized SVG with body geometry, short identifiers, joints, and ground', () => {
     const document = createDefaultDocument();
     const before = structuredClone(document);
     const exported = createSvgExport(document);
@@ -13,19 +13,16 @@ describe('2D SVG export', () => {
     expect(exported.markup).toContain('data-geometry-id="ent_crank"');
     expect(exported.markup).toContain('data-joint-id="link_4"');
     expect(exported.markup).toContain('data-ground-body="eq_0"');
-    expect(exported.markup).toContain('Bâti · FIXE');
+    expect(exported.markup).toContain('>S0</text>');
+    expect(exported.markup).toContain('>L1</text>');
     expect(document).toEqual(before);
   });
 
-  it('applies body rotation to local geometry points in the exported path', () => {
+  it('applies body rotation to local geometry paths in SVG', () => {
     const document = createDefaultDocument();
     document.classesEquivalence.find(({ id }) => id === 'eq_1')!.rotation = Math.PI / 2;
     const markup = createSvgExport(document).markup;
-    const points = markup.match(/data-geometry-id="ent_crank" points="([^"]+)"/)?.[1];
-    expect(points).toBeDefined();
-    const [start, end] = points!.split(' ').map((point) => point.split(',').map(Number));
-    expect(end[0]).toBeCloseTo(start[0]);
-    expect(end[1] - start[1]).toBeCloseTo(-70);
+    expect(markup).toMatch(/data-geometry-id="ent_crank" d="M 0 0 L 70 0" transform="translate\([^"]+\) rotate\(-90\.000\) scale\(1 -1\)"/);
   });
 
   it('rotates the ground marker and joint symbols with their planar orientations', () => {
@@ -37,20 +34,46 @@ describe('2D SVG export', () => {
     expect(markup).toMatch(/<g transform="translate\([^"]+\) rotate\(-90\.000\)">/);
   });
 
-  it('includes all actual liaison instances as distinct joint symbols and labels', () => {
+  it('includes all actual liaison instances as distinct symbols and short labels', () => {
     const document = createDefaultDocument();
     document.liaisons.push({
       ...structuredClone(document.liaisons[0]),
       id: 'parallel-joint',
       name: 'Parallel test pivot',
     });
+
     const markup = createSvgExport(document).markup;
     expect(markup.match(/data-joint-id=/g)).toHaveLength(5);
     expect(markup).toContain('data-joint-id="parallel-joint"');
-    expect(markup).toContain('Parallel test pivot');
+    expect(markup).toContain('>L5</text>');
+    expect(markup).not.toContain('Parallel test pivot');
   });
 
-  it('produces an intentional white empty-state image with non-zero bounds', () => {
+  it('exports curved shape paths, graphic styles, anchors, and configurable short IDs', () => {
+    const document = createDefaultDocument();
+    const bodyShape = document.geometry.entities.find(({ id }) => id === 'ent_piston')!;
+    bodyShape.kind = 'roundedRectangle';
+    bodyShape.cornerRadius = 6;
+    bodyShape.style.fill = '#ff8800';
+    bodyShape.style.fillOpacity = 0.4;
+    document.geometry.display = { bodyIds: true, jointIds: true, anchors: true };
+    const markup = createSvgExport(document).markup;
+    expect(markup).toContain('data-geometry-id="ent_piston"');
+    expect(markup).toContain(' A ');
+    expect(markup).toContain('fill="#ff8800"');
+    expect(markup).toContain('fill-opacity="0.4"');
+    expect(markup).toContain('data-anchor="A"');
+    expect(markup).toContain('>S0</text>');
+    expect(markup).not.toContain('Nomenclature');
+
+    document.geometry.display = { bodyIds: false, jointIds: false, anchors: false };
+    const hiddenIds = createSvgExport(document).markup;
+    expect(hiddenIds).not.toContain('>S0</text>');
+    expect(hiddenIds).not.toContain('>L1</text>');
+    expect(hiddenIds).not.toContain('data-anchor="A"');
+  });
+
+  it('produces an intentional clean white empty-state image with non-zero bounds', () => {
     const document = createDefaultDocument();
     document.classesEquivalence = [];
     document.liaisons = [];
@@ -59,7 +82,7 @@ describe('2D SVG export', () => {
     expect(exported.width).toBeGreaterThan(100);
     expect(exported.height).toBeGreaterThan(100);
     expect(exported.markup).toContain('fill="#ffffff"');
-    expect(exported.markup).toContain('Document vide — aucun élément');
+    expect(exported.markup).not.toContain('Document vide');
   });
 
   it('rejects invalid geometry references rather than omitting the representation', () => {

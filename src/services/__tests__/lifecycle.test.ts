@@ -3,9 +3,10 @@ import { useKineoStore } from '../../store/useKineoStore';
 import { useSimulationStore } from '../../store/useSimulationStore';
 import { createDefaultDocument, createEmptyKineoDocument } from '../../model/defaultDocument';
 import { AUTOSAVE_KEY, BACKUP_KEY, parseDocument, restoreDocument, saveDocument } from '../persistence';
-import { analyzeMechanism, compileMechanism } from '../../core/kinematics/model';
+import { analyzeMechanism, compileMechanism, constraintRows, jacobian } from '../../core/kinematics/model';
 import { buildPlanarScene } from '../../model/planarScene';
 import { createSvgExport } from '../../model/export2d';
+import { buildNomenclature } from '../../model/nomenclature';
 
 class MemoryStorage {
   data = new Map<string, string>();
@@ -51,6 +52,33 @@ describe('Construction, solveur, aperçu et historique', () => {
   it('crée un premier solide avec une couleur valide depuis un document vide', () => {
     const store = useKineoStore.getState(); store.replaceDocument(createEmptyKineoDocument()); store.addClass('Premier', { x: 0, y: 0, z: 0 });
     expect(useKineoStore.getState().document.classesEquivalence[0].color).toMatch(/^#[a-f0-9]{6}$/i);
+  });
+  it('sépare le dessin du calcul et fixe les coordonnées du solide via la fixation', () => {
+    const store = useKineoStore.getState();
+    const source = createDefaultDocument();
+    store.replaceDocument(source);
+    const anchors = structuredClone(source.liaisons[1].anchors);
+    const originalModel = compileMechanism(source);
+    store.setBodyShape('eq_1', 'circle');
+    expect(useKineoStore.getState().document.liaisons[1].anchors).toEqual(anchors);
+    expect(buildNomenclature(useKineoStore.getState().document).bodies[1].shape).toBe('Cercle');
+    const graphicalModel = compileMechanism(useKineoStore.getState().document);
+    expect(constraintRows(graphicalModel, graphicalModel.initialQ)).toEqual(constraintRows(originalModel, originalModel.initialQ));
+    expect(jacobian(graphicalModel, graphicalModel.initialQ)).toEqual(jacobian(originalModel, originalModel.initialQ));
+    const fixationId = useKineoStore.getState().fixBody('eq_1', { x: 0, y: 0, z: 0 }, Math.PI / 2);
+    const fixed = useKineoStore.getState().document.classesEquivalence.find((body) => body.id === 'eq_1')!;
+    expect(fixed.isFixed).toBe(true);
+    const fixedModel = compileMechanism(useKineoStore.getState().document);
+    expect(fixedModel.mobileIds).not.toContain('eq_1');
+    expect(analyzeMechanism(fixedModel).coordinates).toBe(analyzeMechanism(originalModel).coordinates - 3);
+    expect(createSvgExport(useKineoStore.getState().document).markup).toContain(`data-fixation-id="${fixationId}"`);
+    useKineoStore.getState().removeEntity(fixationId, 'Fixation');
+    expect(useKineoStore.getState().document.classesEquivalence.find((body) => body.id === 'eq_1')?.isFixed).toBe(false);
+    expect(compileMechanism(useKineoStore.getState().document).mobileIds).toContain('eq_1');
+    store.undo();
+    expect(compileMechanism(useKineoStore.getState().document).mobileIds).not.toContain('eq_1');
+    store.redo();
+    expect(compileMechanism(useKineoStore.getState().document).mobileIds).toContain('eq_1');
   });
   it('crée un bâti idempotent et permet de le remplacer sans déplacer les solides', () => {
     const store = useKineoStore.getState(); store.replaceDocument(createEmptyKineoDocument());

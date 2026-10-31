@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 — 2026-10-31
+
+- Suppression du message central sur le canvas vide.
+- Ajout d’un outil d’encastrement au bâti avec hachures de support, sélection, déplacement graphique, propriétés et suppression ; les coordonnées du solide sont contraintes par le drapeau mécanique `isFixed` existant.
+- Ajout des représentations segment, rectangle, rectangle arrondi, cercle, ellipse, polygone et contour libre, avec dimensions et styles séparés du modèle cinématique.
+- Partage de la géométrie vectorielle entre canvas, hit-testing et export SVG/PNG ; affichage configurable des repères et des ancrages.
+- Ajout de repères de nomenclature dérivés S0… et L1… et d’un panneau de nomenclature synchronisé avec la sélection.
+- Placement persistant des liaisons par clic, aperçu sous le curseur, accrochage visuel aux ancrages, orientation réglable, Échap et action Terminer.
+- Version applicative portée à 0.3.1 ; le schéma JSON v3.0 et les identifiants techniques restent inchangés.
+- Documentation des représentations, des repères et des interactions. Les symboles sont schématiques et ne revendiquent aucune certification normative.
+
 ## 0.3.0 — 2026-10-31
 
 - Noyau cinématique plan indépendant : coordonnées des solides, ancrages, contraintes, jacobienne centrée et SVD Jacobi.

@@ -1,8 +1,8 @@
-# Kineo v0.3.0
+# Kineo v0.3.1
 
 Kineo est un éditeur web de mécanismes plans avec un **véritable solveur de contraintes géométriques 2D**. Il permet de construire un mécanisme, désigner son bâti, calculer sa mobilité locale et animer un système à un degré de liberté depuis une entrée pivot ou glissière.
 
-L’éditeur conserve les vues 2D, Graph et Split, les propriétés, la grille, le zoom, l’annulation/rétablissement et les exports JSON, SVG et PNG. Les documents utilisent toujours le **schéma JSON v3.0** ; la version de l’application est distincte de celle du schéma. Les champs d’extension existants sont préservés à l’import/export.
+L’éditeur conserve les vues 2D, Graph et Split, les propriétés, la grille, le zoom, l’annulation/rétablissement et les exports JSON, SVG et PNG. Les solides ont désormais une représentation graphique indépendante (segment, rectangle, rectangle arrondi, cercle, ellipse, polygone ou contour libre), avec repères S0…/L1… et une nomenclature sélectionnable. Les documents utilisent toujours le **schéma JSON v3.0** ; la version de l’application est distincte de celle du schéma. Les champs d’extension existants sont préservés à l’import/export.
 
 ## Démarrer
 
@@ -21,7 +21,7 @@ Ouvrir l’adresse indiquée par Vite. L’exemple initial est une bielle-manive
 4. Choisir **Piston** comme solide du point suivi pour afficher sa trajectoire cyan.
 5. **Pause** conserve la pose ; **Stop** ou **Réinitialiser** restaure le document initial.
 
-Pour créer son propre mécanisme : **Nouveau → + Bâti fixe → + Solide → liaison**, puis régler les extrémités, les ancrages et les repères dans l’inspecteur. Un solide existant peut aussi devenir le bâti. Le générateur paramétré dans le panneau cinématique permet de choisir r, L, l’origine, l’orientation du guide et l’angle d’entrée.
+Pour créer son propre mécanisme : **Nouveau → + Bâti fixe → + Solide**, choisir ensuite un type dans **Symboles de liaison**, régler les solides A/B puis cliquer dans le canvas. Le mode de placement reste actif pour les répétitions ; Échap ou **Terminer** le ferme. L’outil **Encastrement au bâti** fixe graphiquement et mécaniquement un solide. Les formes, dimensions et styles se règlent dans l’inspecteur ; les ancrages restent dans le repère mécanique local. Le générateur paramétré dans le panneau cinématique permet de choisir r, L, l’origine, l’orientation du guide et l’angle d’entrée.
 
 ## Calcul mécanique
 
@@ -65,8 +65,11 @@ Le benchmark numérique indépendant de l’interface vérifie trois géométrie
 - [Architecture et modèle mécanique](docs/ARCHITECTURE_V0.3.md)
 - [Mathématiques et équations des sept liaisons](docs/SOLVER_V0.3.md)
 - [Construction et simulation](docs/USER_GUIDE_V0.3.md)
+- [Représentation graphique, fixation et nomenclature](docs/GRAPHICS_V0.3.1.md)
 - [Limites connues](docs/KNOWN_LIMITATIONS.md)
 - [Validation et rapport de livraison](docs/FINAL_VALIDATION_V0.3.md)
+
+Captures Chromium v0.3.1 : [simulation](docs/evidence/v0.3.1-simulation.png) · [nomenclature](docs/evidence/v0.3.1-nomenclature.png) · [espace de travail 1024 × 768](docs/evidence/v0.3.1-1024.png).
 
 Les documents v0.0 à v0.2 et les anciens audits sont des archives de ces versions. Leurs limitations ne décrivent pas nécessairement v0.3.
 

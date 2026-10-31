@@ -1,6 +1,7 @@
 import type { KineoV3 } from './jsonV3';
 import { getJointGlyph } from './jointSymbols';
 import { buildPlanarScene, type PlanarScene, type SceneBounds, type SceneLabel } from './planarScene';
+import { geometryPath, geometryStyle } from './graphics';
 
 export interface SvgExport {
   markup: string;
@@ -48,7 +49,7 @@ function glyphMarkup(type: string, x: number, y: number, angle: number): string 
     if (shape.kind === 'circle') {
       return `<circle r="${shape.radius}" fill="${shape.filled ? '#1f2937' : '#ffffff'}" stroke="#1f2937" stroke-width="1.5"/>`;
     }
-    const points = shape.points.map(({ x: px, y: py }) => `${px},${py}`).join(' ');
+    const points = shape.points.map(({ x: px, y: py }) => `${px},${-py}`).join(' ');
     if (shape.closed) {
       return `<polygon points="${points}" fill="${shape.filled ? '#1f2937' : '#ffffff'}" stroke="#1f2937" stroke-width="1.5" stroke-linejoin="round"/>`;
     }
@@ -57,9 +58,13 @@ function glyphMarkup(type: string, x: number, y: number, angle: number): string 
   return `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${(-angle * 180 / Math.PI).toFixed(3)})">${shapes}</g>`;
 }
 
-function groundMarkup(id: string, center: { x: number; y: number }, angle: number, bounds: SceneBounds): string {
-  const point = svgPoint(center, bounds);
-  return `<g data-ground-body="${escapeXml(id)}" transform="translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${(-angle * 180 / Math.PI).toFixed(3)})" fill="none" stroke="#1f2937" stroke-width="1.5"><path d="M-14 0H14 M-10 4l-4 7 m10-7-4 7 m10-7-4 7"/></g>`;
+function groundMarkup(
+  marker: PlanarScene['groundMarkers'][number],
+  bounds: SceneBounds,
+): string {
+  const point = svgPoint(marker.center, bounds);
+  const symbol = glyphMarkup('GROUND_FIXATION', 0, 0, 0);
+  return `<g data-ground-body="${escapeXml(marker.bodyId)}"${marker.fixation ? ` data-fixation-id="${escapeXml(marker.id)}"` : ''} transform="translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${(-marker.angle * 180 / Math.PI).toFixed(3)})" fill="none" stroke="#1f2937" stroke-width="1.5">${symbol}</g>`;
 }
 
 export function createSvgExport(document: KineoV3): SvgExport {
@@ -69,24 +74,28 @@ export function createSvgExport(document: KineoV3): SvgExport {
   const height = Math.max(100, bounds.maxY - bounds.minY + 2 * EXPORT_PADDING);
   const elements: string[] = [`<rect width="${width}" height="${height}" fill="#ffffff"/>`];
 
-  for (const { entity, bodyId, points } of scene.geometry) {
+  for (const { entity, bodyId, bodyPosition, bodyRotation, points } of scene.geometry) {
+    const { path } = geometryPath(entity);
+    if (!path) continue;
+    const style = geometryStyle(entity);
+    const position = svgPoint(bodyPosition, bounds);
     if (!points.length) continue;
-    const pointList = points.map((point) => {
-      const svg = svgPoint(point, bounds);
-      return `${svg.x.toFixed(2)},${svg.y.toFixed(2)}`;
-    }).join(' ');
-    const dash = entity.style.stroke === 'dashed' ? ' stroke-dasharray="5 3"' : '';
-    const stroke = '#1f2937';
-    const strokeWidth = Math.max(0.8, Math.min(2.4, entity.style.width * 0.45));
-    if (entity.kind === 'rectangle' && points.length >= 4) {
-      elements.push(`<polygon data-body-id="${escapeXml(bodyId)}" data-geometry-id="${escapeXml(entity.id)}" points="${pointList}" fill="#f3f4f6" stroke="${stroke}" stroke-width="${strokeWidth}"${dash}/>`);
-    } else {
-      elements.push(`<polyline data-body-id="${escapeXml(bodyId)}" data-geometry-id="${escapeXml(entity.id)}" points="${pointList}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round"${dash}/>`);
-    }
+    const transform = `translate(${position.x.toFixed(2)} ${position.y.toFixed(2)}) rotate(${(-bodyRotation * 180 / Math.PI).toFixed(3)}) scale(1 -1)`;
+    const dash = style.dashed ? ' stroke-dasharray="5 3"' : '';
+    elements.push(`<path data-body-id="${escapeXml(bodyId)}" data-geometry-id="${escapeXml(entity.id)}" d="${escapeXml(path)}" transform="${transform}" fill="${escapeXml(style.fill)}" fill-opacity="${style.fillOpacity}" stroke="${escapeXml(style.stroke)}" stroke-width="${Math.max(0.8, Math.min(20, style.width))}" stroke-linecap="round" stroke-linejoin="round"${dash}/>`);
   }
 
   for (const marker of scene.groundMarkers) {
-    elements.push(groundMarkup(marker.id, marker.center, marker.angle, bounds));
+    elements.push(groundMarkup(marker, bounds));
+  }
+
+  if (scene.displayAnchors) {
+    for (const joint of scene.joints) {
+      for (const [frame, anchor] of [['A', joint.anchorA], ['B', joint.anchorB]] as const) {
+        const point = svgPoint(anchor, bounds);
+        elements.push(`<circle data-anchor="${frame}" data-joint-anchor="${escapeXml(joint.id)}" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="3" fill="#38bdf8" stroke="#0f172a" stroke-width="1"/>`);
+      }
+    }
   }
 
   for (const joint of scene.joints) {
@@ -122,10 +131,6 @@ export function createSvgExport(document: KineoV3): SvgExport {
   }
 
   for (const label of scene.labels) elements.push(labelMarkup(label, bounds));
-  if (scene.empty) {
-    elements.push(`<text x="${(width / 2).toFixed(2)}" y="${(height / 2).toFixed(2)}" text-anchor="middle" fill="#4b5563" font-family="Arial, Helvetica, sans-serif" font-size="12">Document vide — aucun élément</text>`);
-  }
-
   const markup = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(document.meta.title)}"><title>${escapeXml(document.meta.title)}</title>${elements.join('')}</svg>`;
   return { markup, bounds, width, height, scene };
 }

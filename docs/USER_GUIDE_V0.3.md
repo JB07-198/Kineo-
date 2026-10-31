@@ -2,12 +2,16 @@
 
 ## Construire depuis un document vierge
 
-1. Cliquer **Nouveau**. Le document contient zéro solide, zéro liaison et zéro géométrie.
-2. Cliquer **+ Bâti fixe**. Le repère du bâti est à l’origine. Pour un autre repère, créer un solide, régler sa pose, puis choisir **Définir comme bâti unique** dans ses propriétés. Cette opération est annulable et ne déplace aucun solide.
-3. Ajouter les solides mobiles avec **+ Solide**. Leur segment graphique initial mesure 60 unités ; la géométrie visuelle et les ancrages mécaniques sont distincts.
-4. Choisir un symbole de liaison. La palette connecte d’abord le bâti au solide sélectionné. Dans l’inspecteur, régler **Solide A** et **Solide B** pour connecter deux autres solides.
-5. Régler la position de la liaison ou ses ancrages locaux. Pour une glissière, régler la direction de translation **dans le repère A** et l’angle relatif de référence B − A si nécessaire.
-6. Placer les solides près d’une configuration réalisable. Le solveur assemble localement ; une topologie correcte ne garantit pas une fermeture géométrique.
+1. Cliquer **Nouveau**. Le canvas vide conserve la grille et les axes, sans message central.
+2. Cliquer **+ Bâti fixe** ou créer un solide, régler sa pose, puis choisir **Définir comme bâti unique** dans ses propriétés.
+3. Ajouter les solides mobiles avec **+ Solide**. Leur segment graphique initial mesure 60 unités ; la géométrie visuelle et les ancrages mécaniques sont distincts. La forme et ses styles se changent dans **Représentation graphique**.
+4. Choisir un type dans **Symboles de liaison**, vérifier les solides A/B, régler l’orientation du symbole et cliquer dans le canvas. L’aperçu suit le curseur et l’accrochage aux ancrages proches est signalé.
+5. Le mode de placement reste actif pour créer plusieurs liaisons du même type. Appuyer sur **Échap** ou **Terminer** pour revenir à la sélection. Une liaison est créée seulement si deux solides distincts sont choisis.
+6. Choisir **Encastrement au bâti**, choisir le solide et cliquer au point voulu. Ce solide devient fixe ; le symbole peut être déplacé sans changer son repère mécanique.
+7. Régler la position de liaison ou ses ancrages locaux. Pour une glissière, régler la direction **dans le repère A** et l’angle relatif B − A si nécessaire.
+8. Placer les solides près d’une configuration réalisable. Le solveur assemble localement ; une topologie correcte ne garantit pas une fermeture géométrique.
+
+Le panneau **Nomenclature** affiche les désignations, formes, positions, fixations et connexions. Les repères S0… et L1… sont calculés depuis le modèle, ne remplacent pas les identifiants techniques et un clic sur une ligne sélectionne son élément.
 
 Le bâti est protégé contre le déplacement et la suppression. Pour le remplacer, désigner un autre solide comme bâti ; l’ancien devient mobile. L’import conserve d’éventuels multiples solides fixes, que le solveur traite comme références imposées.
 

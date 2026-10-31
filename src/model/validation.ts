@@ -54,6 +54,10 @@ const EquivalenceClassSchema = z.object({
   name: z.string(),
   color: z.string(),
   isFixed: z.boolean(),
+  groundFixation: z.object({
+    id: z.string().min(1), type: z.literal('GROUND_FIXATION'), localPoint: Vector3Schema,
+    angle: z.number().finite(), wasFixed: z.boolean(), orientationMode: z.enum(['automatic', 'manual']).optional(),
+  }).passthrough().optional(),
   parentId: z.string().nullable(),
   position: Vector3Schema.optional(),
   rotation: z.number().finite().optional(),
@@ -93,17 +97,32 @@ const KinematicsSchema = z.object({
 const GeometryEntitySchema = z.object({
   id: z.string().min(1),
   kind: z.string(),
+  cornerRadius: z.number().finite().nonnegative().optional(),
   classId: z.string().min(1),
   localPoints: z.array(Vector3Schema),
   style: z.object({
+    fill: z.string().optional(),
+    fillOpacity: z.number().min(0).max(1).optional(),
     stroke: z.string(),
     width: z.number().finite().nonnegative(),
     color: z.string(),
   }).passthrough(),
   view: z.string(),
-}).passthrough();
+}).passthrough().superRefine((entity, context) => {
+  const minimumPoints = entity.kind === 'polygon' || entity.kind === 'freeform'
+    ? 3
+    : ['segment', 'rectangle', 'roundedRectangle', 'circle', 'ellipse'].includes(entity.kind) ? 2 : 0;
+  if (entity.localPoints.length < minimumPoints) {
+    context.addIssue({
+      code: 'custom',
+      message: `${entity.kind} geometry requires at least ${minimumPoints} local points`,
+      path: ['localPoints'],
+    });
+  }
+});
 
 const GeometrySchema = z.object({
+  display: z.object({ bodyIds: z.boolean(), jointIds: z.boolean(), anchors: z.boolean() }).passthrough().optional(),
   entities: z.array(GeometryEntitySchema),
 }).passthrough();
 

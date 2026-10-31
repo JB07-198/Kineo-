@@ -3,6 +3,7 @@ import { useKineoStore } from '../../store/useKineoStore';
 import { currentInputValue, useSimulationStore } from '../../store/useSimulationStore';
 import { posesFor } from '../../core/kinematics/model';
 import { createSliderCrank } from '../../core/kinematics/sliderCrank';
+import { APP_VERSION } from '../../model/defaultDocument';
 
 export function KinematicsPanel() {
   const { document, replaceDocument, savedDocumentJson } = useKineoStore();
@@ -16,7 +17,7 @@ export function KinematicsPanel() {
   const field = (label: string, value: number, update: (n: number) => void, step = 'any') => <label className="block text-[11px] text-slate-400">{label}<input className="inspector-input" type="number" step={step} value={value} onChange={(e) => { if (e.target.value && Number.isFinite(Number(e.target.value))) update(Number(e.target.value)); }} /></label>;
   const analysis = s.analysis;
   return <aside className="h-full w-80 shrink-0 overflow-y-auto border-l border-slate-800 bg-slate-900 p-4 text-xs text-slate-300" aria-label="Analyse cinématique">
-    <h2 className="mb-3 font-semibold text-white">Cinématique plane · v0.3.0</h2>
+    <h2 className="mb-3 font-semibold text-white">Cinématique plane · v{APP_VERSION}</h2>
     <button className="toolbar-button w-full" onClick={s.analyze}>Analyser et assembler</button>
     <p className="mt-2 text-[10px] text-slate-500">{document.classesEquivalence.length} solides · {document.liaisons.length} liaisons · XY, rotations en radians dans le moteur</p>
     {analysis && <dl className="my-3 grid grid-cols-2 gap-2 rounded border border-slate-700 bg-slate-950 p-3" aria-label="Résultats numériques">
