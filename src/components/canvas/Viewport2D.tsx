@@ -1,16 +1,20 @@
 import { useSimulationStore } from '../../store/useSimulationStore';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKineoStore } from '../../store/useKineoStore';
 import { buildPlanarScene, type SceneLabel } from '../../model/planarScene';
 import { getJointGlyph } from '../../model/jointSymbols';
 import type { Vector3 } from '../../model/jsonV3';
+import { geometryPath, geometryStyle, isClosedShape } from '../../model/graphics';
+import { useEditorToolStore } from '../../store/useEditorToolStore';
+import { localToWorld2D } from '../../model/planarCoordinates';
 
 type Point = { x: number; y: number };
 type View = { scale: number; center: Point };
 type DragState =
   | { kind: 'pan'; start: Point; center: Point }
   | { kind: 'class'; id: string; startWorld: Point; position: Vector3; edited: boolean }
-  | { kind: 'joint'; id: string; startWorld: Point; position: Vector3; edited: boolean };
+  | { kind: 'joint'; id: string; startWorld: Point; position: Vector3; edited: boolean }
+  | { kind: 'fixation'; id: string; bodyId: string; startWorld: Point; localPoint: Vector3; edited: boolean };
 
 const INITIAL_VIEW: View = { scale: 0.9, center: { x: 105, y: 0 } };
 
@@ -50,14 +54,17 @@ function drawJointGlyph(
   angle: number,
   selected: boolean,
   scale: number,
+  preview = false,
 ): void {
   context.save();
   context.translate(center.x, center.y);
   context.rotate(-angle);
   context.scale(scale, scale);
-  context.strokeStyle = selected ? '#ffffff' : '#cbd5e1';
-  context.fillStyle = '#ffffff';
+  context.globalAlpha = preview ? 0.6 : 1;
+  context.strokeStyle = preview ? '#67e8f9' : selected ? '#ffffff' : '#cbd5e1';
+  context.fillStyle = preview ? '#67e8f9' : '#ffffff';
   context.lineWidth = selected ? 2.5 : 1.8;
+  if (preview) context.setLineDash([3, 2]);
   for (const shape of getJointGlyph(type)) {
     context.beginPath();
     if (shape.kind === 'circle') {
@@ -104,11 +111,68 @@ function drawSceneLabel(context: CanvasRenderingContext2D, label: SceneLabel, vi
   context.fillText(label.text, topLeft.x + 4 * view.scale, topLeft.y + 2 * view.scale);
 }
 
+function nearestJointAnchor(point: Point, document: ReturnType<typeof useKineoStore.getState>['document'], bodyIds: string[], radius: number): Point | null {
+  const allowed = new Set(bodyIds);
+  const bodies = new Map(document.classesEquivalence.map((body) => [body.id, body]));
+  const candidates = document.liaisons.flatMap((joint) => {
+    if (!allowed.has(joint.classA) && !allowed.has(joint.classB)) return [];
+    const bodyA = bodies.get(joint.classA), bodyB = bodies.get(joint.classB);
+    if (!bodyA || !bodyB) return [];
+    return [
+      localToWorld2D(joint.anchors.onClassA, bodyA.position ?? { x: 0, y: 0, z: 0 }, bodyA.rotation ?? 0),
+      localToWorld2D(joint.anchors.onClassB, bodyB.position ?? { x: 0, y: 0, z: 0 }, bodyB.rotation ?? 0),
+    ];
+  });
+  const nearest = candidates
+    .map((candidate) => ({ point: candidate, distance: Math.hypot(candidate.x - point.x, candidate.y - point.y) }))
+    .sort((a, b) => a.distance - b.distance)[0];
+  return nearest && nearest.distance <= radius ? nearest.point : null;
+}
+
+function closestPointOnSegment(point: Point, start: Point, end: Point): Point {
+  const dx = end.x - start.x, dy = end.y - start.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const ratio = lengthSquared
+    ? Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared))
+    : 0;
+  return { x: start.x + ratio * dx, y: start.y + ratio * dy };
+}
+
+function closestBodySurface(
+  bodyId: string,
+  point: Point,
+  document: ReturnType<typeof useKineoStore.getState>['document'],
+  scene: ReturnType<typeof buildPlanarScene>,
+): { point: Point; distance: number; angle: number } | null {
+  const body = document.classesEquivalence.find((item) => item.id === bodyId);
+  if (!body) return null;
+  const candidates = scene.geometry.filter((item) => item.bodyId === bodyId);
+  if (!candidates.length) {
+    const bodyPoint = { x: body.position?.x ?? 0, y: body.position?.y ?? 0 };
+    return { point: bodyPoint, distance: Math.hypot(point.x - bodyPoint.x, point.y - bodyPoint.y), angle: 0 };
+  }
+  let closest: { point: Point; distance: number; angle: number } | null = null;
+  for (const candidate of candidates) {
+    const points = candidate.points;
+    const edgeCount = isClosedShape(candidate.entity.kind) ? points.length : points.length - 1;
+    for (let index = 0; index < edgeCount; index += 1) {
+      const projected = closestPointOnSegment(point, points[index], points[(index + 1) % points.length]);
+      const distance = Math.hypot(projected.x - point.x, projected.y - point.y);
+      if (!closest || distance < closest.distance) {
+        const start = points[index], end = points[(index + 1) % points.length];
+        closest = { point: projected, distance, angle: Math.atan2(end.y - start.y, end.x - start.x) };
+      }
+    }
+  }
+  return closest;
+}
+
 export const Viewport2D: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const hasInitialFit = useRef(false);
   const [view, setView] = useState<View>(INITIAL_VIEW);
+  const [placementPoint, setPlacementPoint] = useState<Point | null>(null);
   const {
     document: editorDocument,
     documentRevision,
@@ -123,9 +187,11 @@ export const Viewport2D: React.FC = () => {
     moveClass,
     moveJoint,
   } = useKineoStore();
+  const tool = useEditorToolStore();
 
   const { preview, trace } = useSimulationStore();
   const document = preview ?? editorDocument;
+  const scene = useMemo(() => buildPlanarScene(document), [document]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -133,8 +199,6 @@ export const Viewport2D: React.FC = () => {
     if (!canvas || !context) return;
     const parent = canvas.parentElement;
     if (!parent) return;
-    const scene = buildPlanarScene(document);
-
     const render = () => {
       const bounds = canvas.getBoundingClientRect();
       const width = bounds.width;
@@ -191,30 +255,27 @@ export const Viewport2D: React.FC = () => {
       context.fillText('X', origin.x + 44, origin.y + 4);
       context.fillText('Y', origin.x - 4, origin.y - 46);
 
-      for (const { entity, bodyId, points: worldPoints } of scene.geometry) {
+      for (const { entity, bodyId, bodyPosition, bodyRotation } of scene.geometry) {
         const body = document.classesEquivalence.find((item) => item.id === bodyId);
         if (!body) continue;
-        const points = worldPoints.map((point) => worldToScreen(point, view, width, height));
-        if (!points.length) continue;
         const active = selectedEntityType === 'Class' && selectedEntityId === body.id;
+        const style = geometryStyle(entity);
+        const center = worldToScreen(bodyPosition, view, width, height);
         context.save();
-        context.strokeStyle = active ? '#ffffff' : entity.style.color || body.color;
-        context.fillStyle = entity.style.color || body.color;
-        context.lineWidth = Math.max(1.5, entity.style.width + (active ? 2 : 0));
-        context.setLineDash(entity.style.stroke === 'dashed' ? [7, 5] : []);
-        context.beginPath();
-        if (entity.kind === 'rectangle' && points.length >= 4) {
-          context.moveTo(points[0].x, points[0].y);
-          points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
-          context.closePath();
-          context.globalAlpha = 0.18;
-          context.fill();
+        context.translate(center.x, center.y);
+        context.rotate(-bodyRotation);
+        context.scale(view.scale, -view.scale);
+        context.strokeStyle = active ? '#ffffff' : style.stroke || body.color;
+        context.fillStyle = style.fill;
+        context.lineWidth = Math.max(1.2, style.width + (active ? 1.5 : 0)) / view.scale;
+        context.setLineDash(style.dashed ? [7 / view.scale, 5 / view.scale] : []);
+        const path = new Path2D(geometryPath(entity).path);
+        if (isClosedShape(entity.kind) && style.fill !== 'none') {
+          context.globalAlpha = style.fillOpacity;
+          context.fill(path);
           context.globalAlpha = 1;
-        } else {
-          context.moveTo(points[0].x, points[0].y);
-          points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
         }
-        context.stroke();
+        context.stroke(path);
         context.setLineDash([]);
         context.restore();
       }
@@ -232,20 +293,8 @@ export const Viewport2D: React.FC = () => {
 
       for (const marker of scene.groundMarkers) {
         const center = worldToScreen(marker.center, view, width, height);
-        context.save();
-        context.translate(center.x, center.y);
-        context.rotate(-marker.angle);
-        context.strokeStyle = '#cbd5e1';
-        context.lineWidth = 1.6;
-        context.beginPath();
-        context.moveTo(-14, 0);
-        context.lineTo(14, 0);
-        for (let x = -10; x <= 10; x += 5) {
-          context.moveTo(x, 4);
-          context.lineTo(x - 4, 11);
-        }
-        context.stroke();
-        context.restore();
+        drawJointGlyph(context, 'GROUND_FIXATION', center, marker.angle,
+          selectedEntityType === 'Fixation' && selectedEntityId === marker.id, view.scale);
       }
 
       for (const joint of scene.joints) {
@@ -298,13 +347,43 @@ export const Viewport2D: React.FC = () => {
         drawJointGlyph(context, joint.type, center, joint.angle, selectedEntityType === 'Joint' && selectedEntityId === joint.id, view.scale);
       }
 
+      if (scene.displayAnchors) {
+        for (const joint of scene.joints) {
+          for (const anchor of [joint.anchorA, joint.anchorB]) {
+            const point = worldToScreen(anchor, view, width, height);
+            context.beginPath();
+            context.arc(point.x, point.y, 3.5, 0, Math.PI * 2);
+            context.fillStyle = '#38bdf8';
+            context.fill();
+            context.strokeStyle = '#0f172a';
+            context.lineWidth = 1;
+            context.stroke();
+          }
+        }
+      }
+
       for (const label of scene.labels) drawSceneLabel(context, label, view, width, height);
-      if (scene.empty) {
-        context.fillStyle = '#94a3b8';
-        context.font = '14px ui-sans-serif, system-ui';
-        context.textAlign = 'center';
-        context.fillText('Document vide — ajoutez un solide pour commencer', width / 2, height / 2);
-        context.textAlign = 'start';
+
+      if (tool.tool !== 'select' && placementPoint) {
+        const fixationPoint = tool.tool === 'fixation'
+          ? closestBodySurface(tool.bodyA, placementPoint, document, scene)
+          : null;
+        const snapped = tool.tool === 'fixation'
+          ? fixationPoint && fixationPoint.distance <= 18 / view.scale ? fixationPoint.point : null
+          : nearestJointAnchor(placementPoint, document, [tool.bodyA, tool.bodyB], 12 / view.scale);
+        const previewCenter = worldToScreen(snapped ?? placementPoint, view, width, height);
+        const previewAngle = tool.tool === 'fixation' && tool.autoOrientation && fixationPoint
+          ? fixationPoint.angle
+          : tool.angle;
+        drawJointGlyph(context, tool.tool === 'fixation' ? 'GROUND_FIXATION' : tool.jointType,
+          previewCenter, previewAngle, false, view.scale, true);
+        if (snapped) {
+          context.beginPath();
+          context.arc(previewCenter.x, previewCenter.y, 8, 0, Math.PI * 2);
+          context.strokeStyle = '#38bdf8';
+          context.lineWidth = 1.5;
+          context.stroke();
+        }
       }
       context.fillStyle = '#64748b';
       context.font = '10px ui-sans-serif, system-ui';
@@ -315,7 +394,7 @@ export const Viewport2D: React.FC = () => {
     const observer = new ResizeObserver(render);
     observer.observe(parent);
     return () => observer.disconnect();
-  }, [document, gridVisible, selectedEntityId, selectedEntityType, view, trace]);
+  }, [document, scene, gridVisible, selectedEntityId, selectedEntityType, view, trace, tool.tool, tool.jointType, tool.bodyA, tool.bodyB, tool.angle, tool.autoOrientation, placementPoint]);
 
   const fitToScene = useCallback(() => {
     const canvas = canvasRef.current;
@@ -388,7 +467,7 @@ export const Viewport2D: React.FC = () => {
     for (const { entity, bodyId, points: worldPoints } of [...buildPlanarScene(document).geometry].reverse()) {
       const points = worldPoints
         .map((point) => worldToScreen(point, view, bounds.width, bounds.height));
-      if (entity.kind === 'rectangle' && points.length >= 4) {
+      if (isClosedShape(entity.kind) && points.length >= 3) {
         if (isPointInPolygon(screenPoint, points) ||
             points.some((point, index) => distanceToSegment(screenPoint, point, points[(index + 1) % points.length]) <= 8)) {
           return bodyId;
@@ -409,6 +488,56 @@ export const Viewport2D: React.FC = () => {
     if (event.button === 1 || event.button === 2 || event.shiftKey) {
       dragRef.current = { kind: 'pan', start: localPoint, center: view.center };
       canvas.setPointerCapture(event.pointerId);
+      return;
+    }
+    const worldPoint = pointerToWorld(event);
+    if (tool.tool !== 'select') {
+      if (preview) {
+        tool.finish();
+        return;
+      }
+    try {
+      if (tool.tool === 'fixation') {
+        if (!tool.bodyA) throw new Error('Ajoutez un solide avant de placer un encastrement au bâti.');
+        const attachment = closestBodySurface(tool.bodyA, worldPoint, document, scene);
+        if (!attachment || attachment.distance > 18 / view.scale) {
+          throw new Error('Cliquez près du contour du solide sélectionné pour y attacher la fixation.');
+        }
+        const snapPoint: Vector3 = { ...attachment.point, z: 0 };
+        useKineoStore.getState().fixBody(tool.bodyA, snapPoint,
+          tool.autoOrientation ? attachment.angle : tool.angle,
+          tool.autoOrientation ? 'automatic' : 'manual');
+      } else {
+        const snap = nearestJointAnchor(worldPoint, document, [tool.bodyA, tool.bodyB], 12 / view.scale);
+        const snapPoint: Vector3 = { ...(snap ?? worldPoint), z: 0 };
+        useKineoStore.getState().addJoint(tool.jointType, tool.bodyA, tool.bodyB, snapPoint, tool.angle);
+      }
+      tool.report('');
+      } catch (error) {
+        tool.report(error instanceof Error ? error.message : 'Placement impossible.');
+      }
+      setPlacementPoint(worldPoint);
+      return;
+    }
+    const hitFixation = [...buildPlanarScene(document).groundMarkers].reverse().find((marker) => {
+      const screen = worldToScreen(marker.center, view, rect.width, rect.height);
+      return Math.hypot(screen.x - localPoint.x, screen.y - localPoint.y) <= 18;
+    });
+    if (hitFixation) {
+      selectEntity(hitFixation.id, hitFixation.fixation ? 'Fixation' : 'Class');
+      if (preview) return;
+      const body = document.classesEquivalence.find((item) => item.id === hitFixation.bodyId);
+      if (body?.groundFixation) {
+        dragRef.current = {
+          kind: 'fixation',
+          id: hitFixation.id,
+          bodyId: body.id,
+          startWorld: worldPoint,
+          localPoint: body.groundFixation.localPoint,
+          edited: false,
+        };
+        canvas.setPointerCapture(event.pointerId);
+      }
       return;
     }
     const hitJoint = [...document.liaisons].reverse().find((joint) => {
@@ -443,6 +572,8 @@ export const Viewport2D: React.FC = () => {
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const world = pointerToWorld(event);
+    if (tool.tool !== 'select') setPlacementPoint(world);
     const drag = dragRef.current;
     if (!drag) return;
     const canvas = event.currentTarget;
@@ -458,7 +589,25 @@ export const Viewport2D: React.FC = () => {
       }));
       return;
     }
-    const world = pointerToWorld(event);
+    if (drag.kind === 'fixation') {
+      if (!drag.edited) {
+        beginEdit();
+        drag.edited = true;
+      }
+      const body = document.classesEquivalence.find((item) => item.id === drag.bodyId);
+      if (!body) return;
+      const angle = body.rotation ?? 0;
+      const surface = closestBodySurface(body.id, world, document, scene);
+      const point = surface?.point ?? world;
+      const dx = point.x - (body.position?.x ?? 0), dy = point.y - (body.position?.y ?? 0);
+      useKineoStore.getState().updateFixation(drag.id, {
+        localPoint: { x: dx * Math.cos(angle) + dy * Math.sin(angle), y: -dx * Math.sin(angle) + dy * Math.cos(angle), z: 0 },
+        ...(body.groundFixation?.orientationMode === 'automatic' && surface
+          ? { angle: surface.angle - angle }
+          : {}),
+      }, false);
+      return;
+    }
     const delta = { x: world.x - drag.startWorld.x, y: world.y - drag.startWorld.y };
     const snap = (value: number) => snapEnabled ? Math.round(value / 10) * 10 : value;
     const position = { ...drag.position, x: snap(drag.position.x + delta.x), y: snap(drag.position.y + delta.y) };
@@ -499,7 +648,9 @@ export const Viewport2D: React.FC = () => {
         <button className="viewport-button" onClick={fitToScene}>Ajuster</button>
       </div>
       <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/80 px-2 py-1 text-[10px] text-slate-500">
-        {preview ? 'Prévisualisation calculée · sélection active · Maj + glisser : vue · Molette : zoomer' : 'Glisser : déplacer · Maj + glisser : translater la vue · Molette : zoomer'}
+        {tool.tool !== 'select'
+          ? `${tool.tool === 'fixation' ? 'Encastrement au bâti' : 'Placement de liaison'} · cliquer pour placer · Échap pour terminer`
+          : preview ? 'Prévisualisation calculée · sélection active · Maj + glisser : vue · Molette : zoomer' : 'Glisser : déplacer · Maj + glisser : translater la vue · Molette : zoomer'}
       </div>
     </div>
   );

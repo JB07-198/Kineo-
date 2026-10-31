@@ -14,6 +14,10 @@ export function validateReferences(doc: KineoV3): void {
   assertUniqueIds(doc.liaisons.map(({ id }) => id), 'joint');
   assertUniqueIds(doc.geometry.entities.map(({ id }) => id), 'geometry');
 
+  assertUniqueIds(doc.classesEquivalence.flatMap((body) => body.groundFixation ? [body.groundFixation.id] : []), 'fixation');
+  for (const body of doc.classesEquivalence) {
+    if (body.groundFixation && !body.isFixed) throw new Error(`Fixation ${body.groundFixation.id} requires a fixed body`);
+  }
   const classes = new Map(doc.classesEquivalence.map((item) => [item.id, item]));
   const dofIds = new Set<string>();
 

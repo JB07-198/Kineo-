@@ -54,11 +54,17 @@ export interface Liaison {
   [key: string]: unknown;
 }
 
+export interface GroundFixation {
+  id: string; type: 'GROUND_FIXATION'; localPoint: Vector3; angle: number; wasFixed: boolean;
+  orientationMode?: 'automatic' | 'manual';
+}
+
 export interface EquivalenceClass {
   id: string;
   name: string;
   color: string;
   isFixed: boolean;
+  groundFixation?: GroundFixation;
   parentId: string | null;
   position?: Vector3;
   rotation?: number;
@@ -95,6 +101,8 @@ export interface Kinematics {
 }
 
 export interface GeometryStyle {
+  fill?: string;
+  fillOpacity?: number;
   stroke: string;
   width: number;
   color: string;
@@ -102,6 +110,7 @@ export interface GeometryStyle {
 }
 
 export interface GeometryEntity {
+  cornerRadius?: number;
   id: string;
   kind: string;
   classId: string;
@@ -111,7 +120,10 @@ export interface GeometryEntity {
   [key: string]: unknown;
 }
 
+export interface DisplaySettings { bodyIds: boolean; jointIds: boolean; anchors: boolean }
+
 export interface Geometry {
+  display?: DisplaySettings;
   entities: GeometryEntity[];
   [key: string]: unknown;
 }

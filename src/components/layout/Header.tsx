@@ -5,6 +5,8 @@ import { createDefaultDocument, createEmptyKineoDocument } from '../../model/def
 import { createSvgExport, renderSvgAsPng } from '../../model/export2d';
 import { validateKineoV3 } from '../../model/validation';
 import { useKineoStore } from '../../store/useKineoStore';
+import { APP_VERSION } from '../../model/defaultDocument';
+import { useEditorToolStore } from '../../store/useEditorToolStore';
 
 function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
@@ -48,6 +50,7 @@ export const Header: React.FC = () => {
         setMessage('Ouverture annulée — les modifications sont conservées.');
       } else {
         replaceDocument(parsed);
+        useEditorToolStore.getState().finish();
         setMessage(`Ouvert : ${file.name}`);
       }
     } catch (error) {
@@ -63,6 +66,7 @@ export const Header: React.FC = () => {
       return;
     }
     replaceDocument(createEmptyKineoDocument());
+    useEditorToolStore.getState().finish();
     setMessage('Nouveau mécanisme vide créé.');
   };
 
@@ -73,6 +77,7 @@ export const Header: React.FC = () => {
       return;
     }
     replaceDocument(createDefaultDocument());
+    useEditorToolStore.getState().finish();
     setMessage('Exemple bielle-manivelle-piston chargé.');
   };
 
@@ -119,7 +124,7 @@ export const Header: React.FC = () => {
             onChange={(event) => setTitle(event.target.value)}
             className="w-56 bg-transparent text-sm font-semibold leading-none text-white outline-none"
           />
-          <span className="text-xs text-slate-400">Kineo · JSON v3.0</span>
+          <span className="text-xs text-slate-400">Kineo {APP_VERSION} · JSON v3.0</span>
         </div>
       </div>
 

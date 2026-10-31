@@ -1,6 +1,8 @@
 import type { GeometryEntity, KineoV3, Vector3 } from './jsonV3';
 import { localToWorld2D, quaternionYaw, type PlanarPoint } from './planarCoordinates';
 import { getJointGlyph } from './jointSymbols';
+import { geometryPath } from './graphics';
+import { buildNomenclature } from './nomenclature';
 
 export interface SceneBounds {
   minX: number;
@@ -12,6 +14,8 @@ export interface SceneBounds {
 export interface SceneGeometry {
   entity: GeometryEntity;
   bodyId: string;
+  bodyPosition: PlanarPoint;
+  bodyRotation: number;
   points: PlanarPoint[];
 }
 
@@ -38,7 +42,8 @@ export interface PlanarScene {
   geometry: SceneGeometry[];
   joints: SceneJoint[];
   labels: SceneLabel[];
-  groundMarkers: Array<{ id: string; center: PlanarPoint; angle: number }>;
+  groundMarkers: Array<{ id: string; bodyId: string; center: PlanarPoint; angle: number; fixation: boolean }>;
+  displayAnchors: boolean;
   bounds: SceneBounds;
   empty: boolean;
 }
@@ -157,18 +162,8 @@ function placeLabel(
 }
 
 function entityPoints(entity: GeometryEntity, position: Vector3, rotation: number): PlanarPoint[] {
-  if (entity.kind === 'rectangle' && entity.localPoints.length >= 2) {
-    const [first, second] = entity.localPoints;
-    const minX = Math.min(first.x, second.x);
-    const maxX = Math.max(first.x, second.x);
-    const minY = Math.min(first.y, second.y);
-    const maxY = Math.max(first.y, second.y);
-    return [
-      { x: minX, y: minY }, { x: maxX, y: minY },
-      { x: maxX, y: maxY }, { x: minX, y: maxY },
-    ].map((point) => localToWorld2D({ ...point, z: 0 }, position, rotation));
-  }
-  return entity.localPoints.map((point) => localToWorld2D(point, position, rotation));
+  return geometryPath(entity).outline.map((point) =>
+    localToWorld2D({ ...point, z: 0 }, position, rotation));
 }
 
 export function buildPlanarScene(document: KineoV3): PlanarScene {
@@ -176,10 +171,14 @@ export function buildPlanarScene(document: KineoV3): PlanarScene {
   const geometry: SceneGeometry[] = document.geometry.entities.map((entity) => {
     const body = bodies.get(entity.classId);
     if (!body) throw new Error(`Cannot render geometry ${entity.id}: unknown body ${entity.classId}`);
+    const position = body.position ?? { x: 0, y: 0, z: 0 };
+    const rotation = body.rotation ?? 0;
     return {
       entity,
       bodyId: body.id,
-      points: entityPoints(entity, body.position ?? { x: 0, y: 0, z: 0 }, body.rotation ?? 0),
+      bodyPosition: { x: position.x, y: position.y },
+      bodyRotation: rotation,
+      points: entityPoints(entity, position, rotation),
     };
   });
   const joints: SceneJoint[] = document.liaisons.map((joint) => {
@@ -211,10 +210,13 @@ export function buildPlanarScene(document: KineoV3): PlanarScene {
     .filter(({ points }) => points.length)
     .map(({ points }) => boundsOfPoints(points, 2));
   const symbolBounds = joints.map(({ center, type, angle }) => glyphBounds(type, center, angle));
+  const nomenclature = buildNomenclature(document);
+  const display = { bodyIds: true, jointIds: true, anchors: false, ...document.geometry.display };
   const reservedLabels: Rect[] = [...geometryBounds, ...symbolBounds];
   const labels: SceneLabel[] = [];
 
   for (const body of document.classesEquivalence) {
+    if (!display.bodyIds) continue;
     const items = geometry.filter((item) => item.bodyId === body.id);
     const bodyPoints = items.flatMap(({ points }) => points);
     const position = body.position ?? { x: 0, y: 0, z: 0 };
@@ -227,12 +229,16 @@ export function buildPlanarScene(document: KineoV3): PlanarScene {
     const obstacle = bodyPoints.length
       ? boundsOfPoints(bodyPoints, 3)
       : { minX: anchor.x - 12, maxX: anchor.x + 12, minY: anchor.y - 12, maxY: anchor.y + 12 };
-    labels.push(placeLabel(`body:${body.id}`, `${body.name}${body.isFixed ? ' · FIXE' : ''}`, 'body', anchor, obstacle, reservedLabels));
+    const reference = nomenclature.bodies.find((item) => item.id === body.id)?.reference;
+    if (reference) labels.push(placeLabel(`body:${body.id}`, reference, 'body', anchor, obstacle, reservedLabels));
   }
 
   for (const joint of joints) {
     const obstacle = glyphBounds(joint.type, joint.center, joint.angle);
-    labels.push(placeLabel(`joint:${joint.id}`, joint.name, 'joint', joint.center, obstacle, reservedLabels));
+    const reference = nomenclature.joints.find((item) => item.id === joint.id)?.reference;
+    if (display.jointIds && reference) {
+      labels.push(placeLabel(`joint:${joint.id}`, reference, 'joint', joint.center, obstacle, reservedLabels));
+    }
     if (joint.mismatch > 1e-6) {
       const midpoint = { x: (joint.anchorA.x + joint.anchorB.x) / 2, y: (joint.anchorA.y + joint.anchorB.y) / 2 };
       const warning = `Ancrages séparés: ${joint.mismatch.toFixed(1)} ${document.meta.lengthUnit}`;
@@ -245,10 +251,21 @@ export function buildPlanarScene(document: KineoV3): PlanarScene {
     .filter((body) => body.isFixed)
     .map((body) => {
       const position = body.position ?? { x: 0, y: 0, z: 0 };
+      if (body.groundFixation) {
+        return {
+          id: body.groundFixation.id,
+          bodyId: body.id,
+          center: localToWorld2D(body.groundFixation.localPoint, position, body.rotation ?? 0),
+          angle: body.groundFixation.angle + (body.rotation ?? 0),
+          fixation: true,
+        };
+      }
       return {
         id: body.id,
+        bodyId: body.id,
         center: localToWorld2D({ x: 0, y: -20, z: 0 }, position, body.rotation ?? 0),
         angle: body.rotation ?? 0,
+        fixation: false,
       };
     });
 
@@ -259,8 +276,8 @@ export function buildPlanarScene(document: KineoV3): PlanarScene {
       { minX: anchorA.x - 4, maxX: anchorA.x + 4, minY: anchorA.y - 4, maxY: anchorA.y + 4 },
       { minX: anchorB.x - 4, maxX: anchorB.x + 4, minY: anchorB.y - 4, maxY: anchorB.y + 4 },
     ]),
-    ...groundMarkers.map(({ center }) => ({ minX: center.x - 18, maxX: center.x + 18, minY: center.y - 18, maxY: center.y + 18 })),
+    ...groundMarkers.map(({ center }) => ({ minX: center.x - 22, maxX: center.x + 22, minY: center.y - 18, maxY: center.y + 12 })),
     ...labels.map(({ bounds: box }) => box),
   ]);
-  return { geometry, joints, labels, groundMarkers, bounds, empty: !geometry.length && !joints.length && !document.classesEquivalence.length };
+  return { geometry, joints, labels, groundMarkers, displayAnchors: display.anchors, bounds, empty: !geometry.length && !joints.length && !document.classesEquivalence.length };
 }

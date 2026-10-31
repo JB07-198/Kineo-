@@ -42,6 +42,12 @@ export function getJointGlyph(type: string): JointGlyphShape[] {
         line({ x: -5, y: 2 }, { x: 8, y: 2 }),
         line({ x: -5, y: 7 }, { x: 8, y: 7 }),
       ];
+    case 'GROUND_FIXATION':
+      return [
+        line({ x: -15, y: 0 }, { x: 15, y: 0 }),
+        ...[-12, -6, 0, 6, 12].map((x) =>
+          line({ x, y: 0 }, { x: x - 6, y: -8 })),
+      ];
     default:
       return [
         polygon({ x: 0, y: -9 }, { x: 9, y: 0 }, { x: 0, y: 9 }, { x: -9, y: 0 }),

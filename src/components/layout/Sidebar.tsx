@@ -1,21 +1,23 @@
 import { useSimulationStore } from '../../store/useSimulationStore';
 import React, { useState } from 'react';
 import { useKineoStore } from '../../store/useKineoStore';
+import { useEditorToolStore } from '../../store/useEditorToolStore';
 
 const JOINTS = [
-  { type: 'PIVOT', label: 'Pivot', symbol: '○' },
-  { type: 'GLISSIERE', label: 'Glissière', symbol: '▤' },
-  { type: 'PIVOT_GLISSANT', label: 'Pivot glissant', symbol: '⊙↔' },
-  { type: 'ROTULE', label: 'Rotule', symbol: '◎' },
-  { type: 'APPUI_PLAN', label: 'Appui plan', symbol: '△' },
-  { type: 'HELICOIDALE', label: 'Hélicoïdale', symbol: '⟳' },
-  { type: 'ENCASTREMENT', label: 'Encastrement', symbol: '⊣' },
+  { type: 'PIVOT', label: 'Pivot' },
+  { type: 'GLISSIERE', label: 'Glissière' },
+  { type: 'PIVOT_GLISSANT', label: 'Pivot glissant' },
+  { type: 'ROTULE', label: 'Rotule' },
+  { type: 'APPUI_PLAN', label: 'Appui plan' },
+  { type: 'HELICOIDALE', label: 'Hélicoïdale' },
+  { type: 'ENCASTREMENT', label: 'Encastrement' },
 ];
 
 export const Sidebar: React.FC = () => {
-  const { document, selectedEntityId, selectedEntityType, addClass, addGround, addJoint, selectEntity } = useKineoStore();
+  const { document, selectedEntityId, selectedEntityType, addClass, addGround, selectEntity } = useKineoStore();
   const [filter, setFilter] = useState('');
   const readOnly = useSimulationStore((state) => !!state.preview);
+  const tool = useEditorToolStore();
   const bodies = document.classesEquivalence;
   const visibleBodies = bodies.filter((body) => body.name.toLowerCase().includes(filter.toLowerCase()));
   const visibleJoints = document.liaisons.filter((joint) => joint.name.toLowerCase().includes(filter.toLowerCase()));
@@ -23,24 +25,6 @@ export const Sidebar: React.FC = () => {
   const createBody = () => {
     const offset = Math.max(0, bodies.length - 4);
     addClass(`Solide ${bodies.length}`, { x: 250 + offset * 25, y: offset * 25, z: 0 });
-  };
-
-  const createJoint = (type: string) => {
-    const selectedBody = selectedEntityType === 'Class'
-      ? bodies.find((body) => body.id === selectedEntityId)
-      : undefined;
-    const secondBody = selectedBody?.isFixed
-      ? bodies.find((body) => !body.isFixed)
-      : selectedBody ?? bodies.find((body) => !body.isFixed);
-    const ground = bodies.find((body) => body.isFixed);
-    if (!ground || !secondBody || ground.id === secondBody.id) return;
-    const first = ground.position ?? { x: 0, y: 0, z: 0 };
-    const second = secondBody.position ?? { x: 0, y: 0, z: 0 };
-    addJoint(type, ground.id, secondBody.id, {
-      x: (first.x + second.x) / 2,
-      y: (first.y + second.y) / 2,
-      z: (first.z + second.z) / 2,
-    });
   };
 
   return (
@@ -51,16 +35,75 @@ export const Sidebar: React.FC = () => {
           {JOINTS.map((joint) => (
             <button
               key={joint.type}
-              disabled={readOnly}
-              onClick={() => createJoint(joint.type)}
-              title={`Ajouter une liaison ${joint.label} entre le bâti et le solide sélectionné`}
-              className="flex min-h-14 flex-col items-center justify-center rounded-md border border-slate-700/70 bg-slate-800/60 px-1 py-1.5 transition-colors hover:border-indigo-500 hover:bg-indigo-600/20"
+              disabled={readOnly || bodies.length < 2}
+              onClick={() => tool.begin(joint.type, document, selectedEntityType === 'Class' ? selectedEntityId : null)}
+              title={`Activer le placement de liaisons ${joint.label}`}
+              className={`min-h-11 rounded-md border px-1 py-1.5 text-[10px] font-medium transition-colors ${
+                tool.tool === 'joint' && tool.jointType === joint.type
+                  ? 'border-indigo-500 bg-indigo-600/30 text-white'
+                  : 'border-slate-700/70 bg-slate-800/60 hover:border-indigo-500 hover:bg-indigo-600/20'
+              }`}
             >
-              <span className="text-xl leading-6 text-indigo-300">{joint.symbol}</span>
-              <span className="text-[10px] font-medium">{joint.label}</span>
+              {joint.label}
             </button>
           ))}
         </div>
+        <button
+          disabled={readOnly || !bodies.length}
+          onClick={() => tool.begin('GROUND_FIXATION', document, selectedEntityType === 'Class' ? selectedEntityId : null)}
+          className={`mt-2 w-full rounded-md border px-2 py-2 text-left text-[10px] font-medium ${
+            tool.tool === 'fixation' ? 'border-indigo-500 bg-indigo-600/30 text-white' : 'border-slate-700 bg-slate-800/60 hover:border-indigo-500'
+          }`}
+        >
+          Encastrement au bâti
+        </button>
+        {tool.tool !== 'select' && (
+          <div className="mt-2 space-y-2 rounded-md border border-indigo-500/40 bg-indigo-500/5 p-2">
+            {tool.tool === 'joint' ? (
+              <>
+                <label className="block text-[10px] text-slate-400">
+                  Solide A
+                  <select value={tool.bodyA} onChange={(event) => tool.configure({ bodyA: event.target.value })} className="inspector-input">
+                    {bodies.map((body) => <option key={body.id} value={body.id}>{body.name}</option>)}
+                  </select>
+                </label>
+                <label className="block text-[10px] text-slate-400">
+                  Solide B
+                  <select value={tool.bodyB} onChange={(event) => tool.configure({ bodyB: event.target.value })} className="inspector-input">
+                    {bodies.map((body) => <option key={body.id} value={body.id}>{body.name}</option>)}
+                  </select>
+                </label>
+                <label className="block text-[10px] text-slate-400">
+                  Orientation du symbole (°)
+                  <input type="number" value={tool.angle * 180 / Math.PI}
+                    onChange={(event) => tool.configure({ angle: Number(event.target.value) * Math.PI / 180 })}
+                    className="inspector-input" />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="block text-[10px] text-slate-400">
+                  Solide à fixer
+                  <select value={tool.bodyA} onChange={(event) => tool.configure({ bodyA: event.target.value })} className="inspector-input">
+                    {bodies.map((body) => <option key={body.id} value={body.id}>{body.name}</option>)}
+                  </select>
+                </label>
+                <label className="flex items-center justify-between text-[10px] text-slate-400">
+                  Orientation automatique (tangente)
+                  <input type="checkbox" checked={tool.autoOrientation}
+                    onChange={(event) => tool.setAutoOrientation(event.target.checked)} />
+                </label>
+                <label className="block text-[10px] text-slate-400">
+                  Orientation de la surface (°)
+                  <input type="number" disabled={tool.autoOrientation} value={tool.angle * 180 / Math.PI}
+                    onChange={(event) => tool.configure({ angle: Number(event.target.value) * Math.PI / 180 })} className="inspector-input" />
+                </label>
+              </>
+            )}
+            {tool.message && <p role="status" className="text-[10px] text-rose-300">{tool.message}</p>}
+            <button onClick={tool.finish} className="toolbar-button w-full">Terminer (Échap)</button>
+          </div>
+        )}
       </div>
 
       {!bodies.some((body) => body.isFixed) && <button className="toolbar-button m-3" disabled={readOnly} onClick={addGround}>+ Bâti fixe</button>}
@@ -117,7 +160,7 @@ export const Sidebar: React.FC = () => {
                 }`}
               >
                 <span className="w-5 shrink-0 text-center text-indigo-300">
-                  {JOINTS.find((item) => item.type === joint.type)?.symbol ?? '○'}
+                  L{document.liaisons.indexOf(joint) + 1}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{joint.name}</span>
               </button>
