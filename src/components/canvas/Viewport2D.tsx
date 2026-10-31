@@ -1,3 +1,4 @@
+import { useSimulationStore } from '../../store/useSimulationStore';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useKineoStore } from '../../store/useKineoStore';
 import { buildPlanarScene, type SceneLabel } from '../../model/planarScene';
@@ -109,7 +110,7 @@ export const Viewport2D: React.FC = () => {
   const hasInitialFit = useRef(false);
   const [view, setView] = useState<View>(INITIAL_VIEW);
   const {
-    document,
+    document: editorDocument,
     documentRevision,
     selectedEntityId,
     selectedEntityType,
@@ -122,6 +123,9 @@ export const Viewport2D: React.FC = () => {
     moveClass,
     moveJoint,
   } = useKineoStore();
+
+  const { preview, trace } = useSimulationStore();
+  const document = preview ?? editorDocument;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -215,6 +219,17 @@ export const Viewport2D: React.FC = () => {
         context.restore();
       }
 
+      if (trace.length) {
+        context.beginPath(); context.strokeStyle = '#22d3ee'; context.lineWidth = 2;
+        trace.forEach((point, index) => {
+          const p = worldToScreen(point, view, width, height);
+          if (index === 0) context.moveTo(p.x, p.y); else context.lineTo(p.x, p.y);
+        });
+        context.stroke();
+        const current = worldToScreen(trace[trace.length - 1], view, width, height);
+        context.beginPath(); context.arc(current.x, current.y, 4, 0, Math.PI * 2); context.fillStyle = '#22d3ee'; context.fill();
+      }
+
       for (const marker of scene.groundMarkers) {
         const center = worldToScreen(marker.center, view, width, height);
         context.save();
@@ -242,7 +257,7 @@ export const Viewport2D: React.FC = () => {
         context.strokeStyle = inconsistent ? '#fb7185' : '#94a3b8';
         context.lineWidth = 1;
         context.setLineDash([4, 4]);
-        for (const anchor of [anchorA, anchorB]) {
+        for (const anchor of joint.type === 'APPUI_PLAN' || (['GLISSIERE', 'PIVOT_GLISSANT'].includes(joint.type) && !inconsistent) ? [] : [anchorA, anchorB]) {
           if (Math.hypot(anchor.x - center.x, anchor.y - center.y) > 0.5) {
             context.beginPath();
             context.moveTo(anchor.x, anchor.y);
@@ -300,7 +315,7 @@ export const Viewport2D: React.FC = () => {
     const observer = new ResizeObserver(render);
     observer.observe(parent);
     return () => observer.disconnect();
-  }, [document, gridVisible, selectedEntityId, selectedEntityType, view]);
+  }, [document, gridVisible, selectedEntityId, selectedEntityType, view, trace]);
 
   const fitToScene = useCallback(() => {
     const canvas = canvasRef.current;
@@ -320,8 +335,7 @@ export const Viewport2D: React.FC = () => {
 
   useEffect(() => {
     if (hasInitialFit.current) return;
-    hasInitialFit.current = true;
-    const frame = window.requestAnimationFrame(fitToScene);
+    const frame = window.requestAnimationFrame(() => { hasInitialFit.current = true; fitToScene(); });
     return () => window.cancelAnimationFrame(frame);
   }, [fitToScene]);
 
@@ -403,6 +417,7 @@ export const Viewport2D: React.FC = () => {
     });
     if (hitJoint) {
       selectEntity(hitJoint.id, 'Joint');
+      if (preview) return;
       dragRef.current = { kind: 'joint', id: hitJoint.id, startWorld: pointerToWorld(event), position: hitJoint.position, edited: false };
       canvas.setPointerCapture(event.pointerId);
       return;
@@ -411,7 +426,7 @@ export const Viewport2D: React.FC = () => {
     if (classId) {
       selectEntity(classId, 'Class');
       const body = document.classesEquivalence.find((item) => item.id === classId);
-      if (body && !body.isFixed) {
+      if (body && !body.isFixed && !preview) {
         dragRef.current = {
           kind: 'class',
           id: classId,
@@ -484,7 +499,7 @@ export const Viewport2D: React.FC = () => {
         <button className="viewport-button" onClick={fitToScene}>Ajuster</button>
       </div>
       <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-slate-900/80 px-2 py-1 text-[10px] text-slate-500">
-        Glisser : déplacer · Maj + glisser : translater la vue · Molette : zoomer
+        {preview ? 'Prévisualisation calculée · sélection active · Maj + glisser : vue · Molette : zoomer' : 'Glisser : déplacer · Maj + glisser : translater la vue · Molette : zoomer'}
       </div>
     </div>
   );

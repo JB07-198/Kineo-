@@ -1,3 +1,11 @@
+# Résultats des tests — version courante v0.3.0
+
+Voir [FINAL_VALIDATION_V0.3.md](FINAL_VALIDATION_V0.3.md) pour les vérifications actuelles et [evidence/benchmark-v0.3.json](evidence/benchmark-v0.3.json) pour les mesures numériques reproductibles.
+
+---
+
+> Archive ci-dessous : les résultats et limitations suivants décrivent v0.2, pas la version actuelle.
+
 # Kineo v0.2 — Test Results
 
 ## Environment and scope

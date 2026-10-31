@@ -1,0 +1,741 @@
+{
+  "meta": {
+    "schemaVersion": "3.0",
+    "appVersion": "0.3.0",
+    "title": "Bielle-manivelle-piston",
+    "author": "",
+    "lengthUnit": "mm",
+    "angleUnit": "deg"
+  },
+  "jointDefinitions": {
+    "PIVOT": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 1,
+      "dofTemplate": [
+        {
+          "type": "rotation",
+          "defaultAxisLocal": {
+            "x": 0,
+            "y": 0,
+            "z": 1
+          },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    },
+    "GLISSIERE": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 1,
+      "dofTemplate": [
+        {
+          "type": "translation",
+          "defaultAxisLocal": {
+            "x": 1,
+            "y": 0,
+            "z": 0
+          },
+          "defaultMin": -100,
+          "defaultMax": 100,
+          "unit": "mm"
+        }
+      ]
+    },
+    "PIVOT_GLISSANT": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 2,
+      "dofTemplate": [
+        {
+          "type": "translation",
+          "defaultAxisLocal": {
+            "x": 1,
+            "y": 0,
+            "z": 0
+          },
+          "defaultMin": -100,
+          "defaultMax": 100,
+          "unit": "mm"
+        },
+        {
+          "type": "rotation",
+          "defaultAxisLocal": {
+            "x": 1,
+            "y": 0,
+            "z": 0
+          },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    },
+    "ROTULE": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 3,
+      "dofTemplate": [
+        {
+          "type": "rotation",
+          "defaultAxisLocal": {
+            "x": 1,
+            "y": 0,
+            "z": 0
+          },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        },
+        {
+          "type": "rotation",
+          "defaultAxisLocal": {
+            "x": 0,
+            "y": 1,
+            "z": 0
+          },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        },
+        {
+          "type": "rotation",
+          "defaultAxisLocal": {
+            "x": 0,
+            "y": 0,
+            "z": 1
+          },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    },
+    "APPUI_PLAN": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 3,
+      "dofTemplate": [
+        {
+          "type": "translation",
+          "defaultAxisLocal": {
+            "x": 1,
+            "y": 0,
+            "z": 0
+          },
+          "defaultMin": -100,
+          "defaultMax": 100,
+          "unit": "mm"
+        },
+        {
+          "type": "translation",
+          "defaultAxisLocal": {
+            "x": 0,
+            "y": 1,
+            "z": 0
+          },
+          "defaultMin": -100,
+          "defaultMax": 100,
+          "unit": "mm"
+        },
+        {
+          "type": "rotation",
+          "defaultAxisLocal": {
+            "x": 0,
+            "y": 0,
+            "z": 1
+          },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    },
+    "HELICOIDALE": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 1,
+      "dofTemplate": [
+        {
+          "type": "rotation",
+          "defaultAxisLocal": {
+            "x": 1,
+            "y": 0,
+            "z": 0
+          },
+          "defaultMin": -180,
+          "defaultMax": 180,
+          "unit": "deg"
+        }
+      ]
+    },
+    "ENCASTREMENT": {
+      "isoCode": "ISO 3952-1",
+      "dofCount": 0,
+      "dofTemplate": []
+    }
+  },
+  "classesEquivalence": [
+    {
+      "id": "eq_0",
+      "name": "Bâti",
+      "color": "#64748b",
+      "isFixed": true,
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": 0
+    },
+    {
+      "id": "eq_1",
+      "name": "Manivelle",
+      "color": "#e63946",
+      "isFixed": false,
+      "parentId": null,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": 0.7853981633974483
+    },
+    {
+      "id": "eq_2",
+      "name": "Bielle",
+      "color": "#2a9d8f",
+      "isFixed": false,
+      "parentId": null,
+      "position": {
+        "x": 49.49747468305833,
+        "y": 49.49747468305832,
+        "z": 0
+      },
+      "rotation": -0.4251736261683743
+    },
+    {
+      "id": "eq_3",
+      "name": "Piston",
+      "color": "#457b9d",
+      "isFixed": false,
+      "parentId": null,
+      "position": {
+        "x": 158.81353022843555,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": 0
+    }
+  ],
+  "liaisons": [
+    {
+      "id": "link_1",
+      "name": "Pivot O",
+      "type": "PIVOT",
+      "classA": "eq_0",
+      "classB": "eq_1",
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "orientation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "anchors": {
+        "onClassA": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "onClassB": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "dof": [
+        {
+          "id": "link_1_dof_1",
+          "type": "rotation",
+          "axisLocal": {
+            "x": 0,
+            "y": 0,
+            "z": 1
+          },
+          "min": -180,
+          "max": 180,
+          "value": 0,
+          "unit": "deg"
+        }
+      ]
+    },
+    {
+      "id": "link_2",
+      "name": "Pivot A",
+      "type": "PIVOT",
+      "classA": "eq_1",
+      "classB": "eq_2",
+      "position": {
+        "x": 49.49747468305833,
+        "y": 49.49747468305832,
+        "z": 0
+      },
+      "orientation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "anchors": {
+        "onClassA": {
+          "x": 70,
+          "y": 0,
+          "z": 0
+        },
+        "onClassB": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "dof": [
+        {
+          "id": "link_2_dof_1",
+          "type": "rotation",
+          "axisLocal": {
+            "x": 0,
+            "y": 0,
+            "z": 1
+          },
+          "min": -180,
+          "max": 180,
+          "value": 0,
+          "unit": "deg"
+        }
+      ]
+    },
+    {
+      "id": "link_3",
+      "name": "Pivot B",
+      "type": "PIVOT",
+      "classA": "eq_2",
+      "classB": "eq_3",
+      "position": {
+        "x": 158.81353022843555,
+        "y": 0,
+        "z": 0
+      },
+      "orientation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "anchors": {
+        "onClassA": {
+          "x": 120,
+          "y": 0,
+          "z": 0
+        },
+        "onClassB": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "dof": [
+        {
+          "id": "link_3_dof_1",
+          "type": "rotation",
+          "axisLocal": {
+            "x": 0,
+            "y": 0,
+            "z": 1
+          },
+          "min": -180,
+          "max": 180,
+          "value": 0,
+          "unit": "deg"
+        }
+      ]
+    },
+    {
+      "id": "link_4",
+      "name": "Glissière horizontale",
+      "type": "GLISSIERE",
+      "classA": "eq_3",
+      "classB": "eq_0",
+      "position": {
+        "x": 158.81353022843555,
+        "y": 0,
+        "z": 0
+      },
+      "orientation": {
+        "x": 0,
+        "y": 0,
+        "z": 0,
+        "w": 1
+      },
+      "anchors": {
+        "onClassA": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "onClassB": {
+          "x": 158.81353022843555,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "dof": [
+        {
+          "id": "link_4_dof_1",
+          "type": "translation",
+          "axisLocal": {
+            "x": 1,
+            "y": 0,
+            "z": 0
+          },
+          "min": -100,
+          "max": 100,
+          "value": 0,
+          "unit": "mm"
+        }
+      ]
+    }
+  ],
+  "kinematics": {
+    "solverType": "none",
+    "closedLoopMode": true,
+    "drivenDofs": []
+  },
+  "geometry": {
+    "entities": [
+      {
+        "id": "ent_guide_upper",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 113.81353022843555,
+            "y": 9,
+            "z": 0
+          },
+          {
+            "x": 203.81353022843555,
+            "y": 9,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 2,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_lower",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 113.81353022843555,
+            "y": -9,
+            "z": 0
+          },
+          {
+            "x": 203.81353022843555,
+            "y": -9,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 2,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_1",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 117.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 124.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_2",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 126.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 133.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_3",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 135.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 142.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_4",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 144.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 151.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_5",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 153.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 160.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_6",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 162.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 169.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_7",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 171.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 178.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_8",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 180.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 187.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_guide_hatch_9",
+        "kind": "segment",
+        "classId": "eq_0",
+        "localPoints": [
+          {
+            "x": 189.81353022843555,
+            "y": -12,
+            "z": 0
+          },
+          {
+            "x": 196.81353022843555,
+            "y": -19,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 1.5,
+          "color": "#94a3b8"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_crank",
+        "kind": "segment",
+        "classId": "eq_1",
+        "localPoints": [
+          {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          {
+            "x": 70,
+            "y": 0,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 4,
+          "color": "#e63946"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_rod",
+        "kind": "segment",
+        "classId": "eq_2",
+        "localPoints": [
+          {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          {
+            "x": 120,
+            "y": 0,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 4,
+          "color": "#2a9d8f"
+        },
+        "view": "2D"
+      },
+      {
+        "id": "ent_piston",
+        "kind": "rectangle",
+        "classId": "eq_3",
+        "localPoints": [
+          {
+            "x": -18,
+            "y": -9,
+            "z": 0
+          },
+          {
+            "x": 18,
+            "y": 9,
+            "z": 0
+          }
+        ],
+        "style": {
+          "stroke": "solid",
+          "width": 2,
+          "color": "#457b9d"
+        },
+        "view": "2D"
+      }
+    ]
+  }
+}

@@ -188,6 +188,13 @@ export function buildPlanarScene(document: KineoV3): PlanarScene {
     if (!bodyA || !bodyB) throw new Error(`Cannot render liaison ${joint.id}: unknown rigid-body endpoint`);
     const anchorA = localToWorld2D(joint.anchors.onClassA, bodyA.position ?? { x: 0, y: 0, z: 0 }, bodyA.rotation ?? 0);
     const anchorB = localToWorld2D(joint.anchors.onClassB, bodyB.position ?? { x: 0, y: 0, z: 0 }, bodyB.rotation ?? 0);
+    const sliding = joint.type === 'GLISSIERE' || joint.type === 'PIVOT_GLISSANT';
+    const axis = joint.dof.find((dof) => dof.type === 'translation')?.axisLocal;
+    const axisAngle = axis ? Math.atan2(axis.y, axis.x) + (bodyA.rotation ?? 0) : quaternionYaw(joint.orientation);
+    const dx = anchorB.x - anchorA.x, dy = anchorB.y - anchorA.y;
+    const mismatch = joint.type === 'APPUI_PLAN' ? 0 : sliding
+      ? Math.abs(-Math.sin(axisAngle) * dx + Math.cos(axisAngle) * dy)
+      : Math.hypot(dx, dy);
     return {
       id: joint.id,
       type: joint.type,
@@ -195,7 +202,7 @@ export function buildPlanarScene(document: KineoV3): PlanarScene {
       center: { x: joint.position.x, y: joint.position.y },
       anchorA,
       anchorB,
-      mismatch: Math.hypot(anchorA.x - anchorB.x, anchorA.y - anchorB.y),
+      mismatch,
       angle: quaternionYaw(joint.orientation),
     };
   });

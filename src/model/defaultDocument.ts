@@ -55,7 +55,7 @@ export const JOINT_DEFINITIONS: Record<string, JointDefinitionTemplate> = {
 
 const point = (x: number, y: number): Vector3 => ({ x, y, z: 0 });
 const quaternion = () => ({ x: 0, y: 0, z: 0, w: 1 });
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.3.0';
 
 function createDocumentMetadata(title: string) {
   return {

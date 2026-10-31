@@ -13,7 +13,7 @@ export const StatusBar: React.FC = () => {
         <span>Grille {gridVisible ? 'active' : 'masquée'}</span>
         <span>Aimantation {snapEnabled ? 'active' : 'inactive'}</span>
       </div>
-      <span className="text-slate-500">Graphe topologique uniquement · aucun solveur cinématique</span>
+      <span className="text-slate-500">Solveur plan · mobilité locale · hors dynamique</span>
     </footer>
   );
 };

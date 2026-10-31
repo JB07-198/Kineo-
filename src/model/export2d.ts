@@ -95,7 +95,7 @@ export function createSvgExport(document: KineoV3): SvgExport {
     const anchorB = svgPoint(joint.anchorB, bounds);
     const inconsistent = joint.mismatch > 1e-6;
     elements.push(`<g data-joint-id="${escapeXml(joint.id)}" data-joint-type="${escapeXml(joint.type)}">`);
-    for (const anchor of [anchorA, anchorB]) {
+    for (const anchor of joint.type === 'APPUI_PLAN' || (['GLISSIERE', 'PIVOT_GLISSANT'].includes(joint.type) && !inconsistent) ? [] : [anchorA, anchorB]) {
       if (Math.hypot(anchor.x - center.x, anchor.y - center.y) > 0.5) {
         elements.push(`<path d="M${anchor.x.toFixed(2)} ${anchor.y.toFixed(2)}L${center.x.toFixed(2)} ${center.y.toFixed(2)}" fill="none" stroke="${inconsistent ? '#b91c1c' : '#6b7280'}" stroke-width="1" stroke-dasharray="3 3"/>`);
       }

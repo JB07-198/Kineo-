@@ -1,3 +1,4 @@
+import { useSimulationStore } from '../../store/useSimulationStore';
 import React, { useState } from 'react';
 import { useKineoStore } from '../../store/useKineoStore';
 
@@ -12,8 +13,9 @@ const JOINTS = [
 ];
 
 export const Sidebar: React.FC = () => {
-  const { document, selectedEntityId, selectedEntityType, addClass, addJoint, selectEntity } = useKineoStore();
+  const { document, selectedEntityId, selectedEntityType, addClass, addGround, addJoint, selectEntity } = useKineoStore();
   const [filter, setFilter] = useState('');
+  const readOnly = useSimulationStore((state) => !!state.preview);
   const bodies = document.classesEquivalence;
   const visibleBodies = bodies.filter((body) => body.name.toLowerCase().includes(filter.toLowerCase()));
   const visibleJoints = document.liaisons.filter((joint) => joint.name.toLowerCase().includes(filter.toLowerCase()));
@@ -49,6 +51,7 @@ export const Sidebar: React.FC = () => {
           {JOINTS.map((joint) => (
             <button
               key={joint.type}
+              disabled={readOnly}
               onClick={() => createJoint(joint.type)}
               title={`Ajouter une liaison ${joint.label} entre le bâti et le solide sélectionné`}
               className="flex min-h-14 flex-col items-center justify-center rounded-md border border-slate-700/70 bg-slate-800/60 px-1 py-1.5 transition-colors hover:border-indigo-500 hover:bg-indigo-600/20"
@@ -60,9 +63,10 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
+      {!bodies.some((body) => body.isFixed) && <button className="toolbar-button m-3" disabled={readOnly} onClick={addGround}>+ Bâti fixe</button>}
       <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2.5">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Pièces et liaisons</h2>
-        <button onClick={createBody} className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">
+        <button disabled={readOnly} onClick={createBody} className="text-xs font-semibold text-indigo-400 hover:text-indigo-300">
           + Solide
         </button>
       </div>

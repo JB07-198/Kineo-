@@ -1,3 +1,4 @@
+import { useSimulationStore } from '../../store/useSimulationStore';
 import React, { useRef, useState } from 'react';
 import { fromInternalModel, validateReferences } from '../../model/conversion';
 import { createDefaultDocument, createEmptyKineoDocument } from '../../model/defaultDocument';
@@ -88,7 +89,7 @@ export const Header: React.FC = () => {
 
   const exportSvg = () => {
     try {
-      const { markup } = createSvgExport(document);
+      const { markup } = createSvgExport(useSimulationStore.getState().preview ?? document);
       downloadBlob(`${document.meta.title.trim().replace(/[^a-z0-9_-]+/gi, '-') || 'kineo-mechanism'}.svg`, new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }));
       setMessage('Export SVG terminé.');
     } catch (error) {
@@ -98,7 +99,7 @@ export const Header: React.FC = () => {
 
   const exportPng = async (targetWidth: number) => {
     try {
-      const { markup } = createSvgExport(document);
+      const { markup } = createSvgExport(useSimulationStore.getState().preview ?? document);
       const blob = await renderSvgAsPng(markup, targetWidth);
       downloadBlob(`${document.meta.title.trim().replace(/[^a-z0-9_-]+/gi, '-') || 'kineo-mechanism'}.png`, blob);
       setMessage(`Export PNG ${targetWidth}px terminé.`);
